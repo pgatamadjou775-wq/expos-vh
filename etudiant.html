@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Commission Exposé — Académie Vases d'Honneur</title>
+<link rel="stylesheet" href="core.css">
+</head>
+<body>
+
+<!-- ================= ACCUEIL ================= -->
+<div class="screen on" id="s-home">
+  <div style="width:100%;">
+    <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
+    <div class="hero">
+      <div class="hero-badge">Académie Vases d'Honneur</div>
+      <div class="hero-title">BIENVENUE À LA<br><b>COMMISSION EXPOSÉ</b></div>
+      <div class="hero-clock" id="home-date">—</div>
+      <div class="hero-clock"><b id="home-time">--:--:--</b></div>
+      <button class="btn-sm" style="margin-top:14px;background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">🔄 Actualiser</button>
+    </div>
+    <div class="tiles">
+      <button class="tile tile-1" onclick="openPresence()">
+        <div class="tile-ico">🕒</div>
+        <div class="tile-t">Pointer mon arrivée</div>
+        <div class="tile-s">Membres de la commission</div>
+      </button>
+      <button class="tile tile-2" onclick="openExpose()">
+        <div class="tile-ico">📚</div>
+        <div class="tile-t">Dépôt des exposés</div>
+        <div class="tile-s">Déposer ou retirer un exposé corrigé</div>
+      </button>
+      <button class="tile tile-3" onclick="openRapport()">
+        <div class="tile-ico">📄</div>
+        <div class="tile-t">Rapport de stage</div>
+        <div class="tile-s">Déposer ou retirer mon rapport</div>
+      </button>
+      <button class="tile tile-4" onclick="openCorrection()">
+        <div class="tile-ico">✅</div>
+        <div class="tile-t">Espace Correcteur</div>
+        <div class="tile-s">Accès réservé — code personnel</div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PRESENCE (arrivée uniquement) ================= -->
+<div class="screen" id="s-presence">
+  <div class="scr-head">
+    <div class="scr-head-top">
+      <button class="back-ico" onclick="goHome()">←</button>
+      <div class="scr-title">Pointer mon arrivée</div>
+    </div>
+    <div class="scr-sub">Commission Exposé</div>
+  </div>
+  <div class="scr-body">
+
+    <div id="pr-search">
+      <div class="srch-box"><span class="srch-ico">🔍</span><input type="text" id="pr-s" placeholder="Rechercher votre nom..." oninput="prFilter()"></div>
+      <div class="pick-list" id="pr-list"></div>
+    </div>
+
+    <div id="pr-form" class="hidden">
+      <div class="card"><div class="card-b">
+        <div id="pr-who" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;"></div>
+        <div class="fg"><label>Jour</label>
+          <select id="pr-jour" onchange="prFillCreneaux()">
+            <option value="Samedi">Samedi</option>
+            <option value="Dimanche">Dimanche</option>
+          </select>
+        </div>
+        <div class="fg"><label>Tranche horaire</label><select id="pr-creneau"></select></div>
+        <div class="fg"><label>Je suis présent(e) pour</label>
+          <div class="chips" id="pr-motifs"></div>
+        </div>
+        <div id="pr-extra" class="hidden">
+          <div class="fg"><label>Classe concernée</label>
+            <select id="pr-classe" onchange="prCheckSalle()">
+              <option value="Classe 1">Classe 1</option>
+              <option value="Classe 2">Classe 2</option>
+              <option value="Classe 3">Classe 3</option>
+            </select>
+          </div>
+          <div id="pr-themes-wrap" class="fg">
+            <label>Thèmes des exposés (facultatif)</label>
+            <textarea id="pr-themes" rows="2" placeholder="Un thème par ligne..."></textarea>
+          </div>
+          <div id="pr-salle-wrap" class="hidden">
+            <div class="note-box complet" id="pr-salle-info" style="margin-bottom:12px;"></div>
+            <div class="fg"><label>Compte-rendu de la présentation</label><textarea id="pr-compte-rendu" rows="2" placeholder="Résumé de la présentation effectuée..."></textarea></div>
+            <label class="chk-row" id="pr-valid-row">
+              <input type="checkbox" id="pr-valid-meth">
+              <span class="chk-txt">Je valide : la présentation de la méthodologie a été effectuée dans cette salle.</span>
+            </label>
+          </div>
+        </div>
+        <button class="btn btn-y" onclick="confirmArrivee()">Confirmer mon arrivée</button>
+      </div></div>
+    </div>
+
+    <div id="pr-success" class="hidden">
+      <div class="suc-wrap">
+        <div class="suc-ico">✅</div>
+        <div class="suc-title" id="pr-suc-title">Pointage enregistré</div>
+        <div class="suc-sub" id="pr-suc-sub"></div>
+        <button class="btn btn-g" style="max-width:280px;" onclick="goHome()">Retour à l'accueil</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================= EXPOSES ================= -->
+<div class="screen" id="s-expose">
+  <div class="scr-head">
+    <div class="scr-head-top">
+      <button class="back-ico" onclick="goHome()">←</button>
+      <div class="scr-title">Dépôt des exposés</div>
+    </div>
+    <div class="scr-sub">Dépôt et retrait des documents</div>
+  </div>
+  <div class="scr-body">
+    <div class="seg">
+      <button id="ex-tab-d" class="on" onclick="exSwitch('deposer')">Déposer</button>
+      <button id="ex-tab-r" onclick="exSwitch('retirer')">Retirer</button>
+    </div>
+
+    <!-- DEPOSER -->
+    <div id="ex-deposer">
+      <div class="card"><div class="card-b">
+        <div class="fg"><label>Nom de l'étudiant(e)</label><input type="text" id="ex-nom" placeholder="Nom complet"></div>
+        <div class="fg"><label>Numéro de téléphone (facultatif — installez l'appli "Suivi" pour recevoir vos statuts)</label><input type="tel" id="ex-tel" placeholder="Ex: 07 00 00 00 00"></div>
+        <div class="fg-row">
+          <div class="fg"><label>Classe</label>
+            <select id="ex-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
+          </div>
+          <div class="fg"><label>Phase</label>
+            <select id="ex-phase"><option value="1ère correction">1ère correction</option><option value="Deuxième correction">Deuxième correction</option><option value="Dépôt définitif">Dépôt définitif</option></select>
+          </div>
+        </div>
+        <div class="fg"><label>Nom de la classe</label><input type="text" id="ex-nom-classe" placeholder="Ex: Classe 2 - Promotion Janvier 2026"></div>
+        <div class="fg"><label>Nom du modérateur de la classe</label><input type="text" id="ex-moderateur" placeholder="Nom du modérateur"></div>
+        <div class="fg"><label>Lieu de dépôt</label>
+          <select id="ex-lieu" onchange="toggleLieuAutre('ex')"></select>
+          <div id="ex-lieu-autre-wrap" class="hidden" style="margin-top:8px;">
+            <input type="text" id="ex-lieu-autre" placeholder="Précisez le nom de votre église / centre...">
+          </div>
+        </div>
+        <div class="fg"><label>Thèmes déposés (facultatif)</label><div id="ex-themes-list"></div>
+          <button class="btn-sm btn-ghost" onclick="addThemeRow('ex-themes-list')" style="margin-top:2px;">+ Ajouter un thème</button>
+        </div>
+        <div class="fg"><label>Photos des pages de couverture (obligatoire)</label>
+          <div class="photo-grid" id="ex-photos"></div>
+          <div class="hint">Prenez ou importez une photo de chaque page de couverture avant d'attester le dépôt.</div>
+        </div>
+        <label class="chk-row" id="ex-chk-row">
+          <input type="checkbox" id="ex-chk" disabled onchange="exToggleBtn()">
+          <span class="chk-txt">J'atteste avoir déposé les documents que j'ai renseignés ci-dessus.</span>
+        </label>
+        <button class="btn btn-y" id="ex-btn" disabled onclick="confirmDepotExpose()">Confirmer le dépôt</button>
+      </div></div>
+    </div>
+
+    <!-- RETIRER -->
+    <div id="ex-retirer" class="hidden">
+      <div class="srch-box"><span class="srch-ico">🔍</span><input type="text" id="ex-r-s" placeholder="Nom ou numéro de l'exposé..." oninput="renderExRetrait()"></div>
+      <div class="pick-list" id="ex-r-list"></div>
+    </div>
+
+    <div id="ex-retrait-detail" class="hidden"></div>
+
+    <div id="ex-success" class="hidden">
+      <div class="suc-wrap">
+        <div class="suc-ico" id="ex-suc-ico">✅</div>
+        <div class="suc-title" id="ex-suc-title"></div>
+        <div class="suc-sub" id="ex-suc-sub"></div>
+        <button class="btn btn-g" style="max-width:280px;" onclick="goHome()">Retour à l'accueil</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= RAPPORT DE STAGE (pas de classe) ================= -->
+<div class="screen" id="s-rapport">
+  <div class="scr-head">
+    <div class="scr-head-top">
+      <button class="back-ico" onclick="goHome()">←</button>
+      <div class="scr-title">Rapport de stage</div>
+    </div>
+    <div class="scr-sub">Dépôt et retrait des documents</div>
+  </div>
+  <div class="scr-body">
+    <div class="seg">
+      <button id="rp-tab-d" class="on" onclick="rpSwitch('deposer')">Déposer</button>
+      <button id="rp-tab-r" onclick="rpSwitch('retirer')">Retirer</button>
+    </div>
+
+    <div id="rp-deposer">
+      <div class="card"><div class="card-b">
+        <div class="fg"><label>Nom de l'étudiant(e)</label><input type="text" id="rp-nom" placeholder="Nom complet"></div>
+        <div class="fg"><label>Numéro de téléphone (facultatif — installez l'appli "Suivi" pour recevoir vos statuts)</label><input type="tel" id="rp-tel" placeholder="Ex: 07 00 00 00 00"></div>
+        <div class="fg"><label>Phase</label>
+          <select id="rp-phase"><option value="1ère correction">1ère correction</option><option value="Deuxième correction">Deuxième correction</option><option value="Dépôt définitif">Dépôt définitif</option></select>
+        </div>
+        <div class="fg"><label>Commission</label><select id="rp-commission"></select></div>
+        <div class="card" style="box-shadow:none;border:1.5px dashed var(--LINE);margin-bottom:13px;"><div class="card-b">
+          <div class="hint" style="margin-bottom:8px;font-weight:700;color:var(--GRN);">Responsable de la commission (obligatoire)</div>
+          <div class="fg-row">
+            <div class="fg"><label>Nom</label><input type="text" id="rp-resp-nom" placeholder="Nom du responsable"></div>
+            <div class="fg"><label>Numéro</label><input type="tel" id="rp-resp-tel" placeholder="Téléphone"></div>
+          </div>
+          <div class="hint" style="margin:10px 0 8px;font-weight:700;color:var(--GRN);">Mandaté pour le dépôt (facultatif)</div>
+          <div class="fg-row">
+            <div class="fg"><label>Nom</label><input type="text" id="rp-mand-nom" placeholder="Nom (si différent)"></div>
+            <div class="fg"><label>Numéro</label><input type="tel" id="rp-mand-tel" placeholder="Téléphone"></div>
+          </div>
+        </div></div>
+        <div class="fg"><label>Lieu de dépôt</label>
+          <select id="rp-lieu" onchange="toggleLieuAutre('rp')"></select>
+          <div id="rp-lieu-autre-wrap" class="hidden" style="margin-top:8px;">
+            <input type="text" id="rp-lieu-autre" placeholder="Précisez le nom de votre église / centre...">
+          </div>
+        </div>
+        <div class="fg"><label>Photos des pages de couverture (obligatoire)</label>
+          <div class="photo-grid" id="rp-photos"></div>
+          <div class="hint">Prenez ou importez une photo de la page de couverture avant d'attester le dépôt.</div>
+        </div>
+        <label class="chk-row" id="rp-chk-row">
+          <input type="checkbox" id="rp-chk" disabled onchange="rpToggleBtn()">
+          <span class="chk-txt">J'atteste avoir déposé le document que j'ai renseigné ci-dessus.</span>
+        </label>
+        <button class="btn btn-y" id="rp-btn" disabled onclick="confirmDepotRapport()">Confirmer le dépôt</button>
+      </div></div>
+    </div>
+
+    <div id="rp-retirer" class="hidden">
+      <div class="srch-box"><span class="srch-ico">🔍</span><input type="text" id="rp-r-s" placeholder="Nom ou numéro du rapport..." oninput="renderRpRetrait()"></div>
+      <div class="pick-list" id="rp-r-list"></div>
+    </div>
+
+    <div id="rp-retrait-detail" class="hidden"></div>
+
+    <div id="rp-success" class="hidden">
+      <div class="suc-wrap">
+        <div class="suc-ico" id="rp-suc-ico">✅</div>
+        <div class="suc-title" id="rp-suc-title"></div>
+        <div class="suc-sub" id="rp-suc-sub"></div>
+        <button class="btn btn-g" style="max-width:280px;" onclick="goHome()">Retour à l'accueil</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CORRECTEUR ================= -->
+<div class="screen" id="s-correction">
+  <div class="scr-head">
+    <div class="scr-head-top">
+      <button class="back-ico" onclick="corLogout()">←</button>
+      <div class="scr-title">Espace Correcteur</div>
+    </div>
+    <div class="scr-sub" id="cor-sub">Accès réservé aux membres de la commission</div>
+  </div>
+  <div class="scr-body">
+
+    <div id="cor-auth">
+      <div class="card"><div class="card-b">
+        <div class="fg"><label>Votre nom</label><input type="text" id="cor-nom" placeholder="Rechercher votre nom..." oninput="corFilterNom()" autocomplete="off"></div>
+        <div class="pick-list" id="cor-nom-list" style="margin-bottom:13px;"></div>
+        <div class="fg"><label>Code personnel</label><input type="password" inputmode="numeric" id="cor-code" placeholder="••••"></div>
+        <button class="btn btn-y" onclick="corAuth()">Accéder</button>
+      </div></div>
+    </div>
+
+    <div id="cor-main" class="hidden">
+      <div class="card"><div class="card-b" style="display:flex;align-items:center;justify-content:space-between;">
+        <div><div style="font-weight:700;font-size:14px;" id="cor-who"></div><div class="hint">Membre de la commission</div></div>
+        <button class="btn-sm btn-ghost" onclick="corLogout()">Déconnexion</button>
+      </div></div>
+      <div class="seg">
+        <button id="cor-tab-e" class="on" onclick="corSwitch('expose')">Exposés</button>
+        <button id="cor-tab-r" onclick="corSwitch('rapport')">Rapports de stage</button>
+      </div>
+      <div class="card-h" style="background:transparent;border:none;padding:0 0 8px;color:var(--MUT);font-size:12px;text-transform:uppercase;letter-spacing:.4px;">Mes corrections en cours</div>
+      <div class="card"><div id="cor-mine" class="pick-list" style="border:none;box-shadow:none;"></div></div>
+      <div class="card-h" style="background:transparent;border:none;padding:0 0 8px;color:var(--MUT);font-size:12px;text-transform:uppercase;letter-spacing:.4px;">Disponibles pour correction</div>
+      <div class="card"><div id="cor-dispo" class="pick-list" style="border:none;box-shadow:none;"></div></div>
+    </div>
+
+    <div id="cor-detail" class="hidden"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="core.js"></script>
+<script src="etudiant.js"></script>
+</body>
+</html>

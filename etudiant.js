@@ -1,0 +1,564 @@
+/* ============================================================
+   COMMISSION EXPOSÉ — Interface Étudiant / Membres
+   ("Bienvenue à l'Académie")
+   Dépend de core.js (modèle de données partagé)
+   ============================================================ */
+
+/* ================= NAVIGATION ================= */
+function goHome(){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById('s-home').classList.add('on');
+}
+function goScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+}
+function tickClock(){
+  const d=new Date();
+  const jours=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  const mois=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  document.getElementById('home-date').textContent = jours[d.getDay()]+' '+d.getDate()+' '+mois[d.getMonth()]+' '+d.getFullYear();
+  document.getElementById('home-time').textContent = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+}
+function currentJour(){
+  const d=new Date().getDay();
+  return d===6 ? 'Samedi' : 'Dimanche';
+}
+
+/* ================= THEME ROWS (dynamic list) ================= */
+function addThemeRow(containerId, value){
+  const c=document.getElementById(containerId);
+  const row=document.createElement('div');
+  row.className='theme-row';
+  row.innerHTML=`<input type="text" placeholder="Intitulé du thème..." value="${value?escapeHtml(value):''}"><button type="button" onclick="this.parentNode.remove()">✕</button>`;
+  c.appendChild(row);
+}
+function getThemes(containerId){
+  return Array.from(document.querySelectorAll('#'+containerId+' input')).map(i=>i.value.trim()).filter(Boolean);
+}
+
+/* ================= LIEU DE DÉPÔT (liste des centres / églises + "Autre") ================= */
+function fillLieuSelect(prefix){
+  const sel=document.getElementById(prefix+'-lieu');
+  sel.innerHTML = DB.eglises.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')
+    + `<option value="__autre__">Autre (mon église/centre n'est pas dans la liste)</option>`;
+}
+function toggleLieuAutre(prefix){
+  const sel=document.getElementById(prefix+'-lieu');
+  document.getElementById(prefix+'-lieu-autre-wrap').classList.toggle('hidden', sel.value!=='__autre__');
+}
+function resetLieu(prefix){
+  fillLieuSelect(prefix);
+  document.getElementById(prefix+'-lieu-autre-wrap').classList.add('hidden');
+  document.getElementById(prefix+'-lieu-autre').value='';
+}
+function getLieu(prefix){
+  const sel=document.getElementById(prefix+'-lieu');
+  if(sel.value==='__autre__'){
+    const v=document.getElementById(prefix+'-lieu-autre').value.trim();
+    return v || 'Autre (non précisé)';
+  }
+  return sel.value;
+}
+function fillCommissionSelect(prefix){
+  const sel=document.getElementById(prefix+'-commission');
+  sel.innerHTML = DB.commissions.length
+    ? DB.commissions.map(c=>`<option value="${escapeHtml(c.nom)}">${escapeHtml(c.nom)}</option>`).join('')
+    : `<option value="">Aucune commission configurée</option>`;
+}
+
+/* ================= PHOTO UPLOAD (générique) ================= */
+const photoStore = { ex:[], rp:[] };
+function renderPhotoGrid(key, gridId){
+  const grid=document.getElementById(gridId);
+  const photos=photoStore[key];
+  grid.innerHTML = photos.map((src,i)=>`<div class="photo-thumb"><img src="${src}"><button class="rm" onclick="removePhoto('${key}','${gridId}',${i})">✕</button></div>`).join('')
+    + `<label class="photo-add">📷<input type="file" accept="image/*" capture="environment" onchange="addPhoto('${key}','${gridId}',this)"></label>`;
+}
+function addPhoto(key, gridId, input){
+  const file=input.files[0]; if(!file) return;
+  compressImageFile(file, 1280, 0.72).then(dataUrl=>{
+    photoStore[key].push(dataUrl);
+    renderPhotoGrid(key, gridId);
+    if(key==='ex') exToggleChk(); else if(key==='rp') rpToggleChk();
+  }).catch(()=>{
+    toast("Impossible de traiter cette photo, réessayez.",'ko');
+  });
+}
+// Redimensionne et recompresse une photo (JPEG) avant stockage.
+// Une photo de téléphone brute (souvent 2 à 8 Mo) devient ~100-300 Ko,
+// ce qui évite de saturer le stockage local après quelques dépôts.
+function compressImageFile(file, maxDim, quality){
+  return new Promise((resolve, reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(reader.error);
+    reader.onload=e=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('image invalide'));
+      img.onload=()=>{
+        let { width, height } = img;
+        if(width > maxDim || height > maxDim){
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width*scale);
+          height = Math.round(height*scale);
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=width; canvas.height=height;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        try{
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        }catch(err){
+          resolve(e.target.result); // repli : image d'origine si le canvas échoue (ex: image trop grande)
+        }
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function removePhoto(key, gridId, i){
+  photoStore[key].splice(i,1);
+  renderPhotoGrid(key, gridId);
+  if(key==='ex') exToggleChk(); else if(key==='rp') rpToggleChk();
+}
+
+/* ================= NOTIFICATIONS (messages destinés à l'appli "Suivi") ================= */
+function notifyDoc(x, texte){
+  sendMessage(x.etudiantNom, texte, x.tel);
+  if(x.responsable && x.responsable.nom) sendMessage(x.responsable.nom, texte, x.responsable.tel);
+  if(x.mandataire && x.mandataire.nom) sendMessage(x.mandataire.nom, texte, x.mandataire.tel);
+}
+
+/* ================================================================
+   MODULE 1 — POINTAGE D'ARRIVÉE DES MEMBRES DE LA COMMISSION
+   ================================================================ */
+let prSelMembre=null;
+function openPresence(){
+  goScreen('s-presence');
+  document.getElementById('pr-search').classList.remove('hidden');
+  document.getElementById('pr-form').classList.add('hidden');
+  document.getElementById('pr-success').classList.add('hidden');
+  document.getElementById('pr-s').value='';
+  prFilter();
+}
+function prFilter(){
+  const q=document.getElementById('pr-s').value.toLowerCase();
+  const list=document.getElementById('pr-list');
+  const membres = DB.membres.filter(m=>m.nom.toLowerCase().includes(q));
+  list.innerHTML = membres.length ? membres.map(m=>`<div class="pick-item" onclick="prSelect('${m.id}')"><div class="av">${initials(m.nom)}</div><div><div class="pk-name">${m.nom}</div></div></div>`).join('')
+    : `<div class="empty"><div class="eico">🔍</div><p>Aucun membre trouvé</p></div>`;
+}
+function prSelect(id){
+  prSelMembre = DB.membres.find(m=>m.id===id);
+  document.getElementById('pr-search').classList.add('hidden');
+  document.getElementById('pr-form').classList.remove('hidden');
+  document.getElementById('pr-who').innerHTML=`<div class="av" style="width:44px;height:44px;">${initials(prSelMembre.nom)}</div><div><div style="font-weight:700;font-size:15px;">${prSelMembre.nom}</div><div class="hint">Arrivée à ${nowTimeStr()}</div></div>`;
+  document.getElementById('pr-jour').value = currentJour();
+  prFillCreneaux();
+  prRenderMotifs();
+}
+function prFillCreneaux(){
+  const jour=document.getElementById('pr-jour').value;
+  const sel=document.getElementById('pr-creneau');
+  const list = DB.creneaux.filter(c=>c.jour===jour);
+  sel.innerHTML = list.map(c=>`<option value="${c.id}">${c.label}</option>`).join('');
+}
+function prRenderMotifs(){
+  const c=document.getElementById('pr-motifs');
+  const motifs = DB.motifsPresence && DB.motifsPresence.length ? DB.motifsPresence : ['Permanence'];
+  c.innerHTML = motifs.map((m,i)=>`<div class="chip ${i===0?'sel':''}" data-m="${escapeHtml(m)}" onclick="prPickMotif(this)"><span class="dot"></span>${escapeHtml(m)}</div>`).join('');
+  document.getElementById('pr-extra').classList.add('hidden');
+}
+function prPickMotif(el){
+  document.querySelectorAll('#pr-motifs .chip').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');
+  const m=el.dataset.m;
+  document.getElementById('pr-extra').classList.toggle('hidden', m==='Permanence');
+  document.getElementById('pr-themes-wrap').classList.toggle('hidden', m==='Présentation de la méthodologie');
+  document.getElementById('pr-salle-wrap').classList.toggle('hidden', m!=='Présentation de la méthodologie');
+  if(m==='Présentation de la méthodologie') prCheckSalle();
+}
+function findSessionForToday(classe){
+  return DB.sessions.find(s=>s.classe===classe && s.dateProgrammee===todayStr() && s.statut==='programmee');
+}
+function prCheckSalle(){
+  const motifEl=document.querySelector('#pr-motifs .chip.sel');
+  if(!motifEl || motifEl.dataset.m!=='Présentation de la méthodologie') return;
+  const classe=document.getElementById('pr-classe').value;
+  const session=findSessionForToday(classe);
+  const info=document.getElementById('pr-salle-info');
+  const row=document.getElementById('pr-valid-row');
+  if(session){
+    const presentateurs=(session.presentateurs||[]).map(p=>p.nom).join(', ')||'—';
+    info.className='note-box complet';
+    info.innerHTML=`<div class="note-lbl">📍 Séance programmée aujourd'hui</div><div class="note-txt">Passage n°${session.numero} — Salle : <b>${escapeHtml(session.salle||'—')}</b> — ${classe}<br>Présentateur(s) prévu(s) : ${escapeHtml(presentateurs)}</div>`;
+    row.classList.remove('hidden');
+  } else {
+    info.className='note-box partiel';
+    info.innerHTML=`<div class="note-lbl">ℹ️ Aucune séance programmée</div><div class="note-txt">Aucune présentation de méthodologie n'est programmée aujourd'hui pour ${classe}.</div>`;
+    row.classList.add('hidden');
+    document.getElementById('pr-valid-meth').checked=false;
+  }
+}
+function confirmArrivee(){
+  const motifEl=document.querySelector('#pr-motifs .chip.sel');
+  const motif = motifEl ? motifEl.dataset.m : 'Permanence';
+  const jour=document.getElementById('pr-jour').value;
+  const creneauId=document.getElementById('pr-creneau').value;
+  const creneau=DB.creneaux.find(c=>c.id===creneauId);
+  const classe = motif==='Permanence'?'':document.getElementById('pr-classe').value;
+  const rec={
+    id:nid(), membreId:prSelMembre.id, membreNom:prSelMembre.nom,
+    date:todayStr(), jour, creneauId, creneauLabel:creneau?creneau.label:'',
+    motif, classe,
+    themes: (motif==='Permanence'||motif==='Présentation de la méthodologie')?'':document.getElementById('pr-themes').value.trim(),
+    heureArrivee: nowTimeStr(), tsArrivee: nowFull(), heureDepart:'', tsDepart:0,
+    dureeMin:0, statut:'present'
+  };
+  DB.presences.push(rec);
+
+  let extraMsg='';
+  if(motif==='Présentation de la méthodologie'){
+    const session=findSessionForToday(classe);
+    const valide=document.getElementById('pr-valid-meth').checked;
+    if(session && valide){
+      session.statut='presentee';
+      session.presentateur=prSelMembre.nom;
+      session.dateValidation=todayStr();
+      session.compteRendu=document.getElementById('pr-compte-rendu').value.trim();
+      extraMsg = ' — Présentation effectuée ✅ (compte-rendu transmis à l\'administration pour validation finale)';
+    } else if(session && !valide){
+      extraMsg = ' — Séance programmée non encore validée.';
+    }
+  }
+  saveDB();
+  document.getElementById('pr-form').classList.add('hidden');
+  document.getElementById('pr-success').classList.remove('hidden');
+  document.getElementById('pr-suc-title').textContent='Arrivée enregistrée';
+  document.getElementById('pr-suc-sub').textContent=`${prSelMembre.nom} — ${jour} ${creneau?creneau.label:''} — ${motif}${extraMsg}`;
+  toast('Présence enregistrée','ok');
+}
+
+/* ================================================================
+   MODULE 2 — DÉPÔT / RETRAIT DES EXPOSÉS
+   ================================================================ */
+function openExpose(){
+  goScreen('s-expose');
+  photoStore.ex=[];
+  document.getElementById('ex-nom').value=''; document.getElementById('ex-tel').value=''; document.getElementById('ex-moderateur').value='';
+  document.getElementById('ex-nom-classe').value='';
+  document.getElementById('ex-themes-list').innerHTML=''; addThemeRow('ex-themes-list');
+  document.getElementById('ex-chk').checked=false; document.getElementById('ex-chk').disabled=true;
+  resetLieu('ex');
+  renderPhotoGrid('ex','ex-photos'); exToggleBtn();
+  exSwitch('deposer');
+  document.getElementById('ex-success').classList.add('hidden');
+}
+function exSwitch(mode){
+  document.getElementById('ex-tab-d').classList.toggle('on', mode==='deposer');
+  document.getElementById('ex-tab-r').classList.toggle('on', mode==='retirer');
+  document.getElementById('ex-deposer').classList.toggle('hidden', mode!=='deposer');
+  document.getElementById('ex-retirer').classList.toggle('hidden', mode!=='retirer');
+  document.getElementById('ex-retrait-detail').classList.add('hidden');
+  document.getElementById('ex-success').classList.add('hidden');
+  if(mode==='retirer'){ document.getElementById('ex-r-s').value=''; renderExRetrait(); }
+  else { document.getElementById('ex-retirer').classList.add('hidden'); document.getElementById('ex-deposer').classList.remove('hidden'); }
+}
+function exToggleChk(){
+  const ok = photoStore.ex.length>0;
+  const chk=document.getElementById('ex-chk');
+  chk.disabled = !ok;
+  document.getElementById('ex-chk-row').classList.toggle('locked', !ok);
+  if(!ok) chk.checked=false;
+  exToggleBtn();
+}
+function exToggleBtn(){
+  document.getElementById('ex-btn').disabled = !document.getElementById('ex-chk').checked;
+}
+function confirmDepotExpose(){
+  const nom=document.getElementById('ex-nom').value.trim();
+  if(!nom){ toast('Le nom de l\'étudiant est requis','ko'); return; }
+  if(!document.getElementById('ex-moderateur').value.trim()){ toast('Le nom du modérateur est requis','ko'); return; }
+  DB.compteurs.expose++;
+  const numero = 'EXP-'+todayStr().replace(/-/g,'')+'-'+String(DB.compteurs.expose).padStart(3,'0');
+  const rec={
+    id:nid(), numero, etudiantNom:nom, tel:document.getElementById('ex-tel').value.trim(), classe:document.getElementById('ex-classe').value,
+    nomClasse:document.getElementById('ex-nom-classe').value.trim(),
+    phase:document.getElementById('ex-phase').value, moderateur:document.getElementById('ex-moderateur').value.trim(),
+    lieu:getLieu('ex'),
+    themes:getThemes('ex-themes-list'), photos:photoStore.ex.slice(),
+    statut:'depose', correcteur:'', commentaire:'', commentaireBrouillon:'', niveauCorrection:'',
+    dateDepot: todayStr(), heureDepot: nowTimeStr(), tsDepot: nowFull(), dateCorrection:'', dateRetrait:''
+  };
+  DB.expositions.push(rec);
+  notifyDoc(rec, `Votre exposé n° ${numero} a été reçu le ${rec.dateDepot} à ${rec.heureDepot} et sera bientôt corrigé.`);
+  saveDB();
+  document.getElementById('ex-deposer').classList.add('hidden');
+  document.getElementById('ex-success').classList.remove('hidden');
+  document.getElementById('ex-suc-title').textContent='Dépôt confirmé';
+  document.getElementById('ex-suc-sub').textContent=`${nom} — n° ${numero} — ${rec.phase}`;
+  toast('Exposé déposé','ok');
+}
+function renderExRetrait(){
+  const q=document.getElementById('ex-r-s').value.toLowerCase();
+  const list=document.getElementById('ex-r-list');
+  let d=DB.expositions.filter(x=>x.statut==='corrige_complet'||x.statut==='corrige_partiel');
+  if(q) d=d.filter(x=>x.etudiantNom.toLowerCase().includes(q)||x.numero.toLowerCase().includes(q));
+  d.sort((a,b)=>b.tsDepot-a.tsDepot);
+  list.innerHTML = d.length ? d.map(x=>`<div class="pick-item" onclick="openExRetraitDetail('${x.id}')"><div class="av">${initials(x.etudiantNom)}</div><div style="flex:1;"><div class="pk-name">${x.etudiantNom}</div><div class="pk-sub">${x.numero} • ${x.classe} • ${x.phase}</div></div><span class="badge ${x.statut==='corrige_complet'?'bg':'by'}">${x.statut==='corrige_complet'?'Complet':'Partiel'}</span></div>`).join('')
+    : `<div class="empty"><div class="eico">📭</div><p>Aucun exposé corrigé disponible pour ce nom</p></div>`;
+}
+function openExRetraitDetail(id){
+  const x=DB.expositions.find(e=>e.id===id); if(!x) return;
+  document.getElementById('ex-retirer').classList.add('hidden');
+  const box=document.getElementById('ex-retrait-detail');
+  box.classList.remove('hidden');
+  box.innerHTML=`
+    <div class="card"><div class="card-b">
+      <div style="font-weight:700;font-size:15px;">${x.etudiantNom}</div>
+      <div class="hint" style="margin-bottom:10px;">${x.numero} • ${x.classe} • ${x.phase}${x.lieu?' • '+escapeHtml(x.lieu):''}</div>
+      <div class="note-box ${x.statut==='corrige_complet'?'complet':'partiel'}">
+        <div class="note-lbl">${x.statut==='corrige_complet'?'✅ Complètement corrigé':'⚠️ Partiellement corrigé'}</div>
+        <div class="note-txt">${x.commentaire ? escapeHtml(x.commentaire) : 'Aucune remarque particulière de la commission.'}</div>
+      </div>
+      <label class="chk-row"><input type="checkbox" id="ex-r-chk" onchange="document.getElementById('ex-r-btn').disabled=!this.checked"><span class="chk-txt">Je confirme avoir récupéré mon document corrigé.</span></label>
+      <button class="btn btn-y" id="ex-r-btn" disabled onclick="confirmRetraitExpose('${x.id}')">Valider le retrait</button>
+      <button class="btn btn-ghost" onclick="exSwitch('retirer')">Annuler</button>
+    </div></div>`;
+}
+function confirmRetraitExpose(id){
+  const x=DB.expositions.find(e=>e.id===id); if(!x) return;
+  x.statut='retire'; x.dateRetrait=todayStr();
+  notifyDoc(x, `Retrait confirmé pour l'exposé n° ${x.numero}. Merci.`);
+  saveDB();
+  document.getElementById('ex-retrait-detail').classList.add('hidden');
+  document.getElementById('ex-success').classList.remove('hidden');
+  document.getElementById('ex-suc-title').textContent='Retrait confirmé';
+  document.getElementById('ex-suc-sub').textContent=`${x.etudiantNom} a récupéré l'exposé n° ${x.numero}`;
+  toast('Retrait enregistré','ok');
+}
+
+/* ================================================================
+   MODULE 3 — RAPPORT DE STAGE (pas de champ classe)
+   ================================================================ */
+function openRapport(){
+  goScreen('s-rapport');
+  photoStore.rp=[];
+  document.getElementById('rp-nom').value=''; document.getElementById('rp-tel').value='';
+  document.getElementById('rp-resp-nom').value=''; document.getElementById('rp-resp-tel').value='';
+  document.getElementById('rp-mand-nom').value=''; document.getElementById('rp-mand-tel').value='';
+  document.getElementById('rp-chk').checked=false; document.getElementById('rp-chk').disabled=true;
+  resetLieu('rp'); fillCommissionSelect('rp');
+  renderPhotoGrid('rp','rp-photos'); rpToggleBtn();
+  rpSwitch('deposer');
+  document.getElementById('rp-success').classList.add('hidden');
+}
+function rpSwitch(mode){
+  document.getElementById('rp-tab-d').classList.toggle('on', mode==='deposer');
+  document.getElementById('rp-tab-r').classList.toggle('on', mode==='retirer');
+  document.getElementById('rp-deposer').classList.toggle('hidden', mode!=='deposer');
+  document.getElementById('rp-retirer').classList.toggle('hidden', mode!=='retirer');
+  document.getElementById('rp-retrait-detail').classList.add('hidden');
+  document.getElementById('rp-success').classList.add('hidden');
+  if(mode==='retirer'){ document.getElementById('rp-r-s').value=''; renderRpRetrait(); }
+  else { document.getElementById('rp-retirer').classList.add('hidden'); document.getElementById('rp-deposer').classList.remove('hidden'); }
+}
+function rpToggleChk(){
+  const ok = photoStore.rp.length>0;
+  const chk=document.getElementById('rp-chk');
+  chk.disabled = !ok;
+  document.getElementById('rp-chk-row').classList.toggle('locked', !ok);
+  if(!ok) chk.checked=false;
+  rpToggleBtn();
+}
+function rpToggleBtn(){
+  document.getElementById('rp-btn').disabled = !document.getElementById('rp-chk').checked;
+}
+function confirmDepotRapport(){
+  const nom=document.getElementById('rp-nom').value.trim();
+  const respNom=document.getElementById('rp-resp-nom').value.trim();
+  const respTel=document.getElementById('rp-resp-tel').value.trim();
+  if(!nom){ toast('Le nom de l\'étudiant est requis','ko'); return; }
+  if(!respNom || !respTel){ toast('Le nom et le numéro du responsable de la commission sont requis','ko'); return; }
+  DB.compteurs.rapport++;
+  const numero = 'STG-'+todayStr().replace(/-/g,'')+'-'+String(DB.compteurs.rapport).padStart(3,'0');
+  const mandNom=document.getElementById('rp-mand-nom').value.trim();
+  const mandTel=document.getElementById('rp-mand-tel').value.trim();
+  const rec={
+    id:nid(), numero, etudiantNom:nom, tel:document.getElementById('rp-tel').value.trim(),
+    phase:document.getElementById('rp-phase').value,
+    responsable:{nom:respNom, tel:respTel},
+    mandataire: mandNom ? {nom:mandNom, tel:mandTel} : null,
+    commission:document.getElementById('rp-commission').value,
+    lieu:getLieu('rp'),
+    photos:photoStore.rp.slice(), statut:'depose', correcteur:'', commentaire:'', commentaireBrouillon:'',
+    dateDepot: todayStr(), heureDepot: nowTimeStr(), tsDepot: nowFull(), dateCorrection:'', dateRetrait:''
+  };
+  DB.rapports.push(rec);
+  notifyDoc(rec, `Votre rapport de stage n° ${numero} a été reçu le ${rec.dateDepot} à ${rec.heureDepot} et sera bientôt corrigé.`);
+  saveDB();
+  document.getElementById('rp-deposer').classList.add('hidden');
+  document.getElementById('rp-success').classList.remove('hidden');
+  document.getElementById('rp-suc-title').textContent='Dépôt confirmé';
+  document.getElementById('rp-suc-sub').textContent=`${nom} — n° ${numero} — ${rec.phase}`;
+  toast('Rapport déposé — le responsable de commission et le mandataire ont été notifiés','ok');
+}
+function renderRpRetrait(){
+  const q=document.getElementById('rp-r-s').value.toLowerCase();
+  const list=document.getElementById('rp-r-list');
+  let d=DB.rapports.filter(x=>x.statut==='corrige_complet'||x.statut==='corrige_partiel');
+  if(q) d=d.filter(x=>x.etudiantNom.toLowerCase().includes(q)||x.numero.toLowerCase().includes(q));
+  d.sort((a,b)=>b.tsDepot-a.tsDepot);
+  list.innerHTML = d.length ? d.map(x=>`<div class="pick-item" onclick="openRpRetraitDetail('${x.id}')"><div class="av">${initials(x.etudiantNom)}</div><div style="flex:1;"><div class="pk-name">${x.etudiantNom}</div><div class="pk-sub">${x.numero} • ${x.phase}</div></div><span class="badge ${x.statut==='corrige_complet'?'bg':'by'}">${x.statut==='corrige_complet'?'Complet':'Partiel'}</span></div>`).join('')
+    : `<div class="empty"><div class="eico">📭</div><p>Aucun rapport corrigé disponible pour ce nom</p></div>`;
+}
+function openRpRetraitDetail(id){
+  const x=DB.rapports.find(e=>e.id===id); if(!x) return;
+  document.getElementById('rp-retirer').classList.add('hidden');
+  const box=document.getElementById('rp-retrait-detail');
+  box.classList.remove('hidden');
+  box.innerHTML=`
+    <div class="card"><div class="card-b">
+      <div style="font-weight:700;font-size:15px;">${x.etudiantNom}</div>
+      <div class="hint" style="margin-bottom:10px;">${x.numero} • ${x.phase}${x.lieu?' • '+escapeHtml(x.lieu):''}</div>
+      <div class="note-box ${x.statut==='corrige_complet'?'complet':'partiel'}">
+        <div class="note-lbl">${x.statut==='corrige_complet'?'✅ Complètement corrigé':'⚠️ Partiellement corrigé'}</div>
+        <div class="note-txt">${x.commentaire ? escapeHtml(x.commentaire) : 'Aucune remarque particulière de la commission.'}</div>
+      </div>
+      <label class="chk-row"><input type="checkbox" id="rp-r-chk" onchange="document.getElementById('rp-r-btn').disabled=!this.checked"><span class="chk-txt">Je confirme avoir récupéré mon rapport corrigé.</span></label>
+      <button class="btn btn-y" id="rp-r-btn" disabled onclick="confirmRetraitRapport('${x.id}')">Valider le retrait</button>
+      <button class="btn btn-ghost" onclick="rpSwitch('retirer')">Annuler</button>
+    </div></div>`;
+}
+function confirmRetraitRapport(id){
+  const x=DB.rapports.find(e=>e.id===id); if(!x) return;
+  x.statut='retire'; x.dateRetrait=todayStr();
+  notifyDoc(x, `Retrait confirmé pour le rapport n° ${x.numero}. Merci.`);
+  saveDB();
+  document.getElementById('rp-retrait-detail').classList.add('hidden');
+  document.getElementById('rp-success').classList.remove('hidden');
+  document.getElementById('rp-suc-title').textContent='Retrait confirmé';
+  document.getElementById('rp-suc-sub').textContent=`${x.etudiantNom} a récupéré le rapport n° ${x.numero}`;
+  toast('Retrait enregistré','ok');
+}
+
+/* ================================================================
+   MODULE 4 — ESPACE CORRECTEUR (accès par code)
+   ================================================================ */
+let corUser=null; let corType='expose';
+function openCorrection(){
+  goScreen('s-correction');
+  document.getElementById('cor-auth').classList.remove('hidden');
+  document.getElementById('cor-main').classList.add('hidden');
+  document.getElementById('cor-detail').classList.add('hidden');
+  document.getElementById('cor-nom').value=''; document.getElementById('cor-code').value='';
+  document.getElementById('cor-nom-list').innerHTML='';
+  corUser=null;
+}
+function corFilterNom(){
+  const q=document.getElementById('cor-nom').value.toLowerCase();
+  const list=document.getElementById('cor-nom-list');
+  if(!q){ list.innerHTML=''; return; }
+  const res=DB.membres.filter(m=>m.nom.toLowerCase().includes(q));
+  list.innerHTML=res.map(m=>`<div class="pick-item" onclick="corPick('${m.id}')"><div class="av">${initials(m.nom)}</div><div class="pk-name">${m.nom}</div></div>`).join('') || `<div class="empty">Aucun membre trouvé</div>`;
+}
+function corPick(id){
+  const m=DB.membres.find(x=>x.id===id);
+  document.getElementById('cor-nom').value=m.nom;
+  document.getElementById('cor-nom-list').innerHTML='';
+  corUser=m;
+}
+function corAuth(){
+  const nomVal=document.getElementById('cor-nom').value.trim();
+  const code=document.getElementById('cor-code').value.trim();
+  const m = corUser && corUser.nom===nomVal ? corUser : DB.membres.find(x=>x.nom.toLowerCase()===nomVal.toLowerCase());
+  if(!m || m.code!==code){ toast('Nom ou code incorrect','ko'); return; }
+  corUser=m;
+  document.getElementById('cor-auth').classList.add('hidden');
+  document.getElementById('cor-main').classList.remove('hidden');
+  document.getElementById('cor-who').textContent=m.nom;
+  corSwitch('expose');
+}
+function corLogout(){ corUser=null; goHome(); }
+function corSwitch(type){
+  corType=type;
+  document.getElementById('cor-tab-e').classList.toggle('on', type==='expose');
+  document.getElementById('cor-tab-r').classList.toggle('on', type==='rapport');
+  renderCorLists();
+}
+function corDB(){ return corType==='expose' ? DB.expositions : DB.rapports; }
+function renderCorLists(){
+  const data=corDB();
+  const mine=data.filter(x=>x.statut==='en_correction' && x.correcteur===corUser.nom);
+  const dispo=data.filter(x=>x.statut==='depose');
+  const mineEl=document.getElementById('cor-mine'), dispoEl=document.getElementById('cor-dispo');
+  mineEl.innerHTML = mine.length ? mine.map(x=>`<div class="pick-item" onclick="corOpenFinaliser('${x.id}')"><div class="av">${initials(x.etudiantNom)}</div><div style="flex:1;"><div class="pk-name">${x.etudiantNom}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase}${x.commentaireBrouillon?' • 💾 brouillon enregistré':''}</div></div><span class="badge by">En cours</span></div>`).join('') : `<div class="empty">Aucune correction en cours</div>`;
+  dispoEl.innerHTML = dispo.length ? dispo.map(x=>`<div class="pick-item"><div class="av">${initials(x.etudiantNom)}</div><div style="flex:1;"><div class="pk-name">${x.etudiantNom}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase} • déposé ${x.dateDepot}</div></div><button class="btn-sm btn-g" onclick="corPrendre('${x.id}')">Prendre</button></div>`).join('') : `<div class="empty">Aucun document disponible pour le moment</div>`;
+}
+function corPrendre(id){
+  const x=corDB().find(d=>d.id===id); if(!x) return;
+  x.statut='en_correction'; x.correcteur=corUser.nom; x.tsDebutCorrection=nowFull();
+  notifyDoc(x, `Votre ${corType==='expose'?'exposé':'rapport'} n° ${x.numero} est en cours de correction.`);
+  saveDB(); renderCorLists(); toast('Document pris en correction','ok');
+}
+function corOpenFinaliser(id){
+  const x=corDB().find(d=>d.id===id); if(!x) return;
+  document.getElementById('cor-main').classList.add('hidden');
+  const box=document.getElementById('cor-detail');
+  box.classList.remove('hidden');
+  box.innerHTML=`
+    <div class="card"><div class="card-b">
+      <div style="font-weight:700;font-size:15px;">${x.etudiantNom}</div>
+      <div class="hint" style="margin-bottom:12px;">${x.numero} • ${x.classe||''} • ${x.phase}</div>
+      ${x.themes && x.themes.length ? `<div class="hint" style="margin-bottom:10px;">Thèmes : ${x.themes.map(escapeHtml).join(', ')}</div>` : ''}
+      <div class="fg"><label>Résultat de la correction</label>
+        <div class="chips">
+          <div class="chip sel" data-v="corrige_complet" onclick="corPickResult(this)"><span class="dot"></span>Complètement corrigé</div>
+          <div class="chip" data-v="corrige_partiel" onclick="corPickResult(this)"><span class="dot"></span>Partiellement corrigé</div>
+        </div>
+      </div>
+      <div class="fg"><label>Commentaire / remarques (envoyées automatiquement à l'étudiant)</label><textarea id="cor-comment" rows="3" placeholder="Remarques de la commission...">${escapeHtml(x.commentaireBrouillon||'')}</textarea></div>
+      <button class="btn btn-y" onclick="corFinaliser('${x.id}')">✅ Enregistrer la correction (terminée)</button>
+      <button class="btn btn-ghost" onclick="corSaveDraft('${x.id}')">💾 Enregistrer et continuer plus tard</button>
+      <button class="btn btn-ghost" onclick="corSwitch(corType)">Annuler</button>
+    </div></div>`;
+}
+function corSaveDraft(id){
+  const x=corDB().find(d=>d.id===id); if(!x) return;
+  x.commentaireBrouillon = document.getElementById('cor-comment').value.trim();
+  saveDB();
+  document.getElementById('cor-detail').classList.add('hidden');
+  document.getElementById('cor-main').classList.remove('hidden');
+  renderCorLists();
+  toast('Brouillon enregistré — vous pourrez continuer cette correction plus tard','ok');
+}
+function corPickResult(el){
+  document.querySelectorAll('#cor-detail .chip').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');
+}
+function corFinaliser(id){
+  const x=corDB().find(d=>d.id===id); if(!x) return;
+  const resEl=document.querySelector('#cor-detail .chip.sel');
+  x.statut = resEl ? resEl.dataset.v : 'corrige_complet';
+  x.commentaire = document.getElementById('cor-comment').value.trim();
+  x.dateCorrection = todayStr();
+  const remarque = x.commentaire ? ` Remarques du correcteur : ${x.commentaire}` : '';
+  notifyDoc(x, `Votre correction est terminée pour le ${corType==='expose'?'exposé':'rapport'} n° ${x.numero}. Veuillez passer à la commission récupérer le document.${remarque}`);
+  saveDB();
+  document.getElementById('cor-detail').classList.add('hidden');
+  document.getElementById('cor-main').classList.remove('hidden');
+  renderCorLists();
+  toast('Correction enregistrée — l\'étudiant a reçu la notification et les remarques','ok');
+}
+
+/* ================= INIT ================= */
+tickClock(); setInterval(tickClock,1000);
+addThemeRow('ex-themes-list');
+
+window.onRemoteUpdate = function(){
+  if(document.getElementById('s-presence').classList.contains('on') && !document.getElementById('pr-search').classList.contains('hidden')) prFilter();
+  if(document.getElementById('s-expose').classList.contains('on') && !document.getElementById('ex-retirer').classList.contains('hidden')) renderExRetrait();
+  if(document.getElementById('s-rapport').classList.contains('on') && !document.getElementById('rp-retirer').classList.contains('hidden')) renderRpRetrait();
+  if(!document.getElementById('cor-main').classList.contains('hidden')) renderCorLists();
+};

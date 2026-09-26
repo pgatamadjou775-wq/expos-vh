@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d3b2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Suivi VH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<title>Suivi — Académie Vases d'Honneur</title>
+<link rel="stylesheet" href="core.css">
+</head>
+<body>
+
+<!-- ================= ACCUEIL SUIVI ================= -->
+<div class="screen on" id="s-home">
+  <div style="width:100%;">
+    <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
+    <div class="hero">
+      <div class="hero-badge">Académie Vases d'Honneur</div>
+      <div class="hero-title">SUIVI DE MES<br><b>EXPOSÉS &amp; RAPPORTS</b></div>
+      <div class="hero-clock">Commission Exposé</div>
+    </div>
+    <div class="tiles">
+      <button class="tile tile-1" onclick="openSuivi()" style="grid-column:span 2;">
+        <div class="tile-ico">🔔</div>
+        <div class="tile-t">Mon suivi</div>
+        <div class="tile-s">Statuts de mes dépôts + notifications + remarques du correcteur</div>
+      </button>
+      <button class="tile tile-2" onclick="openBibliotheque()" style="grid-column:span 2;">
+        <div class="tile-ico">📖</div>
+        <div class="tile-t">Source Vases d'Honneur</div>
+        <div class="tile-s">Livres et sources autorisés pour mes recherches, par classe</div>
+      </button>
+    </div>
+    <div class="home-foot">
+      <div class="hint" style="text-align:center;">Astuce : ajoutez cette page à votre écran d'accueil pour l'utiliser comme une application.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MON SUIVI ================= -->
+<div class="screen" id="s-suivi">
+  <div class="scr-head">
+    <div class="scr-head-top">
+      <button class="back-ico" onclick="goHome()">←</button>
+      <div class="scr-title">Mon suivi</div>
+    </div>
+    <div class="scr-sub">Statuts et notifications</div>
+  </div>
+  <div class="scr-body">
+    <div class="srch-box"><span class="srch-ico">🔍</span><input type="text" id="su-s" placeholder="Tapez votre nom..." oninput="renderSuivi()"></div>
+
+    <div id="su-docs"></div>
+
+    <div class="card-h" style="background:transparent;border:none;padding:14px 0 8px;color:var(--MUT);font-size:12px;text-transform:uppercase;letter-spacing:.4px;">Notifications</div>
+    <div class="card"><div id="su-messages"></div></div>
+  </div>
+</div>
+
+<!-- ================= BIBLIOTHEQUE : SOURCE VASES D'HONNEUR ================= -->
+<div class="screen" id="s-biblio">
+  <div class="scr-head">
+    <div class="scr-head-top">
+      <button class="back-ico" onclick="goHome()">←</button>
+      <div class="scr-title">Source Vases d'Honneur</div>
+    </div>
+    <div class="scr-sub">Livres et sources autorisés pour les exposés</div>
+  </div>
+  <div class="scr-body">
+    <div class="seg">
+      <button id="bib-tab-1" class="on" onclick="biblioSwitch('Classe 1')">Classe 1</button>
+      <button id="bib-tab-2" onclick="biblioSwitch('Classe 2')">Classe 2</button>
+      <button id="bib-tab-3" onclick="biblioSwitch('Classe 3')">Classe 3</button>
+    </div>
+    <div class="card"><div id="bib-list"></div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="core.js"></script>
+<script src="suivi.js"></script>
+</body>
+</html>

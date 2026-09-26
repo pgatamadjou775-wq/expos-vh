@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Administration — Commission Exposé</title>
+<link rel="stylesheet" href="core.css">
+<style>
+  body{background:var(--BG);}
+  .page{max-width:900px;margin:0 auto;}
+  .page-body{padding:16px;padding-bottom:60px;}
+  .sub-card{border:1.5px dashed var(--LINE);border-radius:12px;padding:12px;margin-bottom:12px;}
+  .sub-card h4{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--GRN);margin-bottom:8px;}
+  .alert-banner{background:var(--REDP);border:1.5px solid var(--RED);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--RED);font-weight:600;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur" style="max-height:130px;"></div>
+  <div class="scr-head" style="position:sticky;top:0;">
+    <div class="scr-head-top">
+      <div class="tile-ico" style="background:rgba(255,255,255,.15);color:#fff;">⚙️</div>
+      <div class="scr-title">Administration &amp; Statistiques</div>
+    </div>
+    <div class="scr-sub" style="margin-left:0;">Académie Vases d'Honneur — Commission Exposé (interface distincte du côté étudiant)</div>
+    <button class="btn-sm" style="margin-top:10px;background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">🔄 Actualiser depuis le serveur</button>
+  </div>
+
+  <div class="page-body">
+
+    <div id="ad-auth">
+      <div class="card"><div class="card-b">
+        <div class="fg"><label>Code administrateur</label><input type="password" inputmode="numeric" id="ad-code" placeholder="••••"></div>
+        <button class="btn btn-g" onclick="adAuth()">Accéder</button>
+        <div class="hint" style="margin-top:10px;">Code par défaut : 2026 (modifiable dans le code source). Cette interface est indépendante du fichier étudiant ; les deux partagent les mêmes données uniquement si servis depuis la même origine web.</div>
+      </div></div>
+    </div>
+
+    <div id="ad-main" class="hidden">
+      <div class="seg" style="flex-wrap:wrap;">
+        <button id="ad-tab-membres" class="on" onclick="adSwitch('membres')">Membres</button>
+        <button id="ad-tab-expose" onclick="adSwitch('expose')">Exposés</button>
+        <button id="ad-tab-rapport" onclick="adSwitch('rapport')">Rapports</button>
+        <button id="ad-tab-config" onclick="adSwitch('config')">Configuration</button>
+        <button id="ad-tab-seances" onclick="adSwitch('seances')">Séances &amp; Sorties</button>
+        <button id="ad-tab-export" onclick="adSwitch('export')">Rapport annuel</button>
+      </div>
+
+      <!-- MEMBRES -->
+      <div id="ad-membres">
+        <div class="kpi-grid">
+          <div class="kpi kpi-g"><div class="kv" id="ad-m-present">0</div><div class="kl">Présents aujourd'hui</div></div>
+          <div class="kpi kpi-n"><div class="kv" id="ad-m-total">0</div><div class="kl">Membres commission</div></div>
+        </div>
+        <div id="ad-m-alertes"></div>
+        <div class="card"><div class="card-h">Journal de présence — aujourd'hui</div><div id="ad-m-list"></div></div>
+        <div class="card"><div class="card-h">Bilan hebdomadaire / mensuel &amp; situation par membre</div><div id="ad-m-bilan"></div></div>
+      </div>
+
+      <!-- EXPOSES -->
+      <div id="ad-expose" class="hidden">
+        <div class="kpi-grid">
+          <div class="kpi kpi-n"><div class="kv" id="ade-depose">0</div><div class="kl">Déposés</div></div>
+          <div class="kpi kpi-y"><div class="kv" id="ade-encours">0</div><div class="kl">En correction</div></div>
+          <div class="kpi kpi-g"><div class="kv" id="ade-corrige">0</div><div class="kl">Corrigés</div></div>
+          <div class="kpi kpi-r"><div class="kv" id="ade-retard">0</div><div class="kl">En retard</div></div>
+        </div>
+        <div class="card"><div class="card-h">Suivi des exposés</div><div id="ad-e-list"></div></div>
+      </div>
+
+      <!-- RAPPORTS -->
+      <div id="ad-rapport" class="hidden">
+        <div class="kpi-grid">
+          <div class="kpi kpi-n"><div class="kv" id="adr-depose">0</div><div class="kl">Déposés</div></div>
+          <div class="kpi kpi-y"><div class="kv" id="adr-encours">0</div><div class="kl">En correction</div></div>
+          <div class="kpi kpi-g"><div class="kv" id="adr-corrige">0</div><div class="kl">Corrigés</div></div>
+          <div class="kpi kpi-r"><div class="kv" id="adr-retard">0</div><div class="kl">En retard</div></div>
+        </div>
+        <div class="card"><div class="card-h">Répartition des rapports par commission</div><div class="card-b" id="ad-r-commission"></div></div>
+        <div class="card"><div class="card-h">Suivi des rapports de stage</div><div id="ad-r-list"></div></div>
+      </div>
+
+      <!-- CONFIGURATION -->
+      <div id="ad-config" class="hidden">
+        <div class="card"><div class="card-h">Membres de la commission exposé</div><div class="card-b">
+          <div id="ad-mb-list"></div>
+          <div class="fg-row" style="margin-top:10px;">
+            <input type="text" id="ad-mb-new-nom" placeholder="Nom complet...">
+            <input type="text" id="ad-mb-new-code" placeholder="Code personnel" inputmode="numeric">
+          </div>
+          <input type="tel" id="ad-mb-new-tel" placeholder="Numéro de téléphone (WhatsApp)" style="margin-top:8px;width:100%;padding:12px;border:1.5px solid var(--LINE);border-radius:10px;">
+          <button class="btn-sm btn-g" style="width:100%;margin-top:8px;" onclick="addMembre()">+ Ajouter le membre</button>
+        </div></div>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Tranches horaires</div><div class="card-b" id="ad-cr-list"></div></div>
+        <button class="btn btn-g" onclick="saveCreneaux()">Enregistrer les créneaux</button>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Motifs de présence (pointage)</div><div class="card-b">
+          <div id="ad-mo-list"></div>
+          <div class="theme-row" style="margin-top:10px;"><input type="text" id="ad-mo-new" placeholder="Nouveau motif..."><button type="button" onclick="addMotif()" style="background:var(--GRNP);color:var(--GRN);">+</button></div>
+        </div></div>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Lieux de dépôt (Centre Kodesh, églises filles, villes)</div><div class="card-b">
+          <div id="ad-eg-list"></div>
+          <div class="theme-row" style="margin-top:10px;"><input type="text" id="ad-eg-new" placeholder="Nom du nouveau lieu..."><button type="button" onclick="addEglise()" style="background:var(--GRNP);color:var(--GRN);">+</button></div>
+        </div></div>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Commissions</div><div class="card-b">
+          <div id="ad-co-list"></div>
+          <div class="fg-row" style="margin-top:10px;">
+            <input type="text" id="ad-co-new-nom" placeholder="Nom de la commission...">
+            <input type="number" id="ad-co-new-total" placeholder="Total attendu" min="0">
+          </div>
+          <button class="btn-sm btn-g" style="width:100%;margin-top:8px;" onclick="addCommission()">+ Ajouter la commission</button>
+        </div></div>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Source Vases d'Honneur (bibliothèque)</div><div class="card-b">
+          <div id="ad-bib-list"></div>
+          <div class="sub-card">
+            <h4>Ajouter une source</h4>
+            <div class="fg-row">
+              <select id="bib-new-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
+              <select id="bib-new-type"><option value="Livre">Livre</option><option value="Document">Document</option><option value="Lien">Lien</option></select>
+            </div>
+            <div class="fg-row" style="margin-top:8px;">
+              <input type="text" id="bib-new-titre" placeholder="Titre">
+              <input type="text" id="bib-new-auteur" placeholder="Auteur (facultatif)">
+            </div>
+            <input type="text" id="bib-new-lien" placeholder="Lien ou note (facultatif)" style="margin-top:8px;width:100%;padding:12px;border:1.5px solid var(--LINE);border-radius:10px;">
+            <button class="btn-sm btn-g" style="width:100%;margin-top:8px;" onclick="addBiblio()">+ Ajouter à la bibliothèque</button>
+          </div>
+        </div></div>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Calendrier de méditation &amp; Quiz biblique</div><div class="card-b">
+          <h4 style="font-size:12px;text-transform:uppercase;color:var(--MUT);margin-bottom:8px;">Calendrier de méditation</h4>
+          <div id="ad-med-list"></div>
+          <div class="sub-card">
+            <div class="fg-row">
+              <select id="med-new-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
+              <input type="date" id="med-new-date">
+            </div>
+            <input type="text" id="med-new-livre" placeholder="Livre / passage médité" style="margin-top:8px;width:100%;padding:12px;border:1.5px solid var(--LINE);border-radius:10px;">
+            <button class="btn-sm btn-g" style="width:100%;margin-top:8px;" onclick="addMeditation()">+ Ajouter au calendrier</button>
+          </div>
+          <h4 style="font-size:12px;text-transform:uppercase;color:var(--MUT);margin:16px 0 8px;">Quiz biblique — 3 passages programmés</h4>
+          <div id="ad-quiz-list"></div>
+          <div class="sub-card">
+            <div class="fg-row">
+              <select id="quiz-new-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
+              <input type="date" id="quiz-new-date">
+            </div>
+            <input type="text" id="quiz-new-livre" placeholder="Référence livre déjà médité" style="margin-top:8px;width:100%;padding:12px;border:1.5px solid var(--LINE);border-radius:10px;">
+            <textarea id="quiz-new-contenu" rows="2" placeholder="Contenu / questions du quiz" style="margin-top:8px;width:100%;padding:12px;border:1.5px solid var(--LINE);border-radius:10px;"></textarea>
+            <button class="btn-sm btn-g" style="width:100%;margin-top:8px;" onclick="addQuiz()">+ Programmer ce passage</button>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- SEANCES & SORTIES -->
+      <div id="ad-seances" class="hidden">
+        <div class="card"><div class="card-h">Signaler une reprise de classe</div><div class="card-b">
+          <div class="fg-row">
+            <div class="fg"><label>Classe</label>
+              <select id="se-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
+            </div>
+            <div class="fg"><label>Date de reprise</label><input type="date" id="se-date-reprise"></div>
+          </div>
+          <div class="fg"><label>Salle</label><input type="text" id="se-salle" placeholder="Ex: Salle B2"></div>
+          <div class="sub-card">
+            <h4>Présentateur(s) de la méthodologie</h4>
+            <div class="fg-row"><input type="text" id="se-pres1-nom" placeholder="Nom présentateur 1"><input type="tel" id="se-pres1-tel" placeholder="Numéro"></div>
+            <div class="fg-row" style="margin-top:8px;"><input type="text" id="se-pres2-nom" placeholder="Nom présentateur 2 (facultatif)"><input type="tel" id="se-pres2-tel" placeholder="Numéro"></div>
+          </div>
+          <div class="sub-card">
+            <h4>Modérateurs de la classe</h4>
+            <div class="fg-row"><input type="text" id="se-mod1-nom" placeholder="Nom modérateur 1"><input type="tel" id="se-mod1-tel" placeholder="Numéro"></div>
+            <div class="fg-row" style="margin-top:8px;"><input type="text" id="se-mod2-nom" placeholder="Nom modérateur 2 (facultatif)"><input type="tel" id="se-mod2-tel" placeholder="Numéro"></div>
+          </div>
+          <div class="fg"><label>Proposition de thèmes (fonction de la classe)</label><div id="se-themes-list"></div>
+            <button class="btn-sm btn-ghost" onclick="addThemeRow('se-themes-list')" style="margin-top:2px;">+ Ajouter un thème</button>
+          </div>
+          <button class="btn btn-y" onclick="signalerReprise()">Programmer le 1er passage (+7 jours)</button>
+        </div></div>
+
+        <div id="ad-se-alertes"></div>
+        <div class="card"><div class="card-h">Séances de méthodologie programmées</div><div class="card-b" id="ad-se-list"></div></div>
+        <button class="btn btn-g" onclick="saveSeances()">Enregistrer les modifications de séances</button>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Exposés déposés par église fille</div><div class="card-b" id="ad-eg-stats"></div></div>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Programmer une sortie dans une église fille</div><div class="card-b">
+          <div class="fg-row">
+            <div class="fg"><label>Église fille</label><select id="so-eglise"></select></div>
+            <div class="fg"><label>Date de sortie</label><input type="date" id="so-date"></div>
+          </div>
+          <div class="sub-card">
+            <h4>Postes</h4>
+            <div class="fg-row"><input type="text" id="so-president-nom" placeholder="Président du jury — nom"><input type="tel" id="so-president-tel" placeholder="Numéro"></div>
+            <div class="fg-row" style="margin-top:8px;"><input type="text" id="so-jury1-nom" placeholder="Jury 1 — nom"><input type="tel" id="so-jury1-tel" placeholder="Numéro"></div>
+            <div class="fg-row" style="margin-top:8px;"><input type="text" id="so-jury2-nom" placeholder="Jury 2 — nom"><input type="tel" id="so-jury2-tel" placeholder="Numéro"></div>
+            <div class="fg-row" style="margin-top:8px;"><input type="text" id="so-obs1-nom" placeholder="Observateur 1 — nom"><input type="tel" id="so-obs1-tel" placeholder="Numéro"></div>
+            <div class="fg-row" style="margin-top:8px;"><input type="text" id="so-obs2-nom" placeholder="Observateur 2 — nom"><input type="tel" id="so-obs2-tel" placeholder="Numéro"></div>
+            <div class="fg-row" style="margin-top:8px;"><input type="text" id="so-coord-nom" placeholder="Coordonnateur (facultatif) — nom"><input type="tel" id="so-coord-tel" placeholder="Numéro"></div>
+          </div>
+          <button class="btn btn-y" onclick="addSortie()">Programmer la sortie</button>
+        </div></div>
+        <div class="card"><div class="card-h">Sorties programmées</div><div class="card-b" id="ad-so-list"></div></div>
+      </div>
+
+      <!-- EXPORT -->
+      <div id="ad-export" class="hidden">
+        <div class="card"><div class="card-b">
+          <div class="fg"><label>Année</label><select id="ad-ex-year"></select></div>
+          <button class="btn btn-g" onclick="renderAnnualPreview()">Afficher l'aperçu</button>
+        </div></div>
+        <div class="card"><div class="card-h">Aperçu du rapport d'évolution</div><div class="card-b" id="ad-ex-preview"></div></div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-r" onclick="exportAnnualPDF()">📄 Télécharger en PDF</button>
+          <button class="btn btn-g" onclick="exportAnnualWord()">📝 Télécharger en Word</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="print-area" style="display:none;"></div>
+<div class="toast" id="toast"></div>
+
+<script src="core.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
