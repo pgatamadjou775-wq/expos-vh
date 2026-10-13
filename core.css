@@ -6,59 +6,36 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(160deg,#e9f2ec 0%,#f7f4e9 45%,#fbeceb 100%);color:var(--INK);overflow-x:hidden;min-height:100vh;}
-/* Tablettes et téléphones (jusqu'à ~1000px) : plein écran, kiosque confortable —
-   c'est l'appareil réel utilisé sur le terrain (tablette de la commission, téléphone étudiant). */
-@media (min-width:640px) and (max-width:999.98px){
-  .scr-body, .tiles{max-width:640px;margin-left:auto;margin-right:auto;}
-}
-/* Grands écrans (PC/desktop réels, hors usage terrain) : cadre "téléphone" décoratif uniquement. */
-@media (min-width:1000px){
-  body{display:flex;align-items:flex-start;justify-content:center;padding:28px 12px;}
-  .screen{position:relative !important;inset:auto !important;max-width:460px;width:100%;margin:0 auto;border-radius:36px;overflow:hidden;box-shadow:0 30px 70px rgba(13,59,46,.28),0 0 0 8px #fff,0 0 0 9px rgba(13,59,46,.08);min-height:80vh;max-height:92vh;}
-  .screen.on{display:flex;}
-}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--BG);color:var(--INK);overflow-x:hidden;}
 
 /* ===== SCREENS (kiosk full-screen panels) ===== */
 .screen{position:fixed;inset:0;display:none;flex-direction:column;background:var(--BG);z-index:10;overflow-y:auto;}
 .screen.on{display:flex;}
-.scr-head{background:linear-gradient(135deg,var(--GRN) 0%,var(--GRN2) 65%,var(--GRN3) 100%);padding:16px 16px 30px;position:sticky;top:0;z-index:5;box-shadow:0 2px 14px rgba(13,59,46,.25);position:relative;overflow:visible;}
-.scr-head::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:26px;background:var(--BG);border-radius:50% 50% 0 0/100% 100% 0 0;pointer-events:none;}
+.scr-head{background:linear-gradient(135deg,var(--GRN) 0%,var(--GRN2) 65%,var(--GRN3) 100%);padding:16px 16px 18px;position:sticky;top:0;z-index:5;box-shadow:0 2px 14px rgba(13,59,46,.25);}
 .scr-head-top{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
 .back-ico{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.14);border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .scr-title{color:#fff;font-weight:800;font-size:17px;letter-spacing:.2px;}
 .scr-sub{color:rgba(255,255,255,.65);font-size:12px;margin-top:2px;margin-left:44px;}
-.scr-body{padding:20px 16px 16px;flex:1;padding-bottom:40px;}
+.scr-body{padding:16px;flex:1;padding-bottom:40px;}
 
-/* ===== BANNIERE (image réelle) ===== */
-.banner-wrap{position:relative;line-height:0;}
-.banner-img{width:100%;display:block;aspect-ratio:2/1;object-fit:cover;object-position:center top;max-height:300px;}
-.banner-wrap::after{content:'';position:absolute;left:0;right:0;bottom:0;height:60%;background:linear-gradient(180deg,rgba(13,59,46,0) 0%,rgba(13,59,46,.55) 100%);pointer-events:none;}
-
-@media (max-width:359px){
-  .fg-row, .kpi-grid{grid-template-columns:1fr;}
-  .tiles{grid-template-columns:1fr;}
-  .hero-title{font-size:21px;}
-}
-.hero{background:linear-gradient(160deg,var(--GRN) 0%,var(--GRN2) 55%,var(--GRN3) 100%);padding:26px 20px 70px;text-align:center;position:relative;overflow:visible;margin-top:-3px;}
-.hero::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:34px;background:var(--BG);border-radius:50% 50% 0 0/100% 100% 0 0;z-index:1;pointer-events:none;}
-.hero::before{content:'';position:absolute;left:0;right:0;bottom:32px;height:4px;background:linear-gradient(90deg,var(--RED),var(--YEL),var(--GRN3));z-index:2;pointer-events:none;}
-.hero-badge{display:inline-block;padding:5px 14px;border-radius:999px;background:rgba(255,255,255,.14);color:var(--YEL);font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:14px;border:1px solid rgba(240,185,11,.45);}
-.hero-title{color:#fff;font-weight:900;font-size:25px;line-height:1.25;letter-spacing:.2px;text-shadow:0 2px 10px rgba(0,0,0,.15);}
+/* ===== HOME ===== */
+.hero{background:linear-gradient(160deg,var(--GRN) 0%,var(--GRN2) 55%,var(--GRN3) 100%);padding:34px 20px 60px;text-align:center;position:relative;overflow:hidden;}
+.hero::after{content:'';position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(90deg,var(--RED),var(--YEL),var(--GRN3));}
+.hero-badge{display:inline-block;padding:5px 14px;border-radius:999px;background:rgba(255,255,255,.12);color:var(--YEL);font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:14px;border:1px solid rgba(240,185,11,.4);}
+.hero-title{color:#fff;font-weight:900;font-size:26px;line-height:1.25;letter-spacing:.2px;text-shadow:0 2px 10px rgba(0,0,0,.15);}
 .hero-title b{color:var(--YEL);}
 .hero-clock{margin-top:16px;color:rgba(255,255,255,.75);font-size:13px;font-variant-numeric:tabular-nums;}
 .hero-clock b{color:#fff;font-size:15px;}
 
-.tiles{padding:0 14px;margin-top:-40px;position:relative;z-index:2;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.tile{background:var(--W);border-radius:22px;padding:20px 16px;box-shadow:0 12px 30px rgba(13,59,46,.18);border:1px solid rgba(13,59,46,.05);cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:10px;transition:transform .15s ease,box-shadow .15s ease;}
-.tile:active{transform:scale(.96);box-shadow:0 6px 16px rgba(13,59,46,.15);}
-.tile-ico{width:48px;height:48px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:0 4px 10px rgba(0,0,0,.06),inset 0 0 0 1px rgba(255,255,255,.4);}
+.tiles{padding:0 14px;margin-top:-34px;position:relative;z-index:2;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.tile{background:var(--W);border-radius:16px;padding:18px 14px;box-shadow:0 8px 24px rgba(13,59,46,.14);border:none;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:8px;}
+.tile-ico{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:21px;}
 .tile-t{font-weight:800;font-size:14.5px;color:var(--INK);line-height:1.25;}
 .tile-s{font-size:11px;color:var(--MUT);line-height:1.3;}
-.tile-1 .tile-ico{background:linear-gradient(145deg,#e3f3ec,#c7e8da);}
-.tile-2 .tile-ico{background:linear-gradient(145deg,#fff8e0,#fbe6ad);}
-.tile-3 .tile-ico{background:linear-gradient(145deg,#fff8e0,#fbe6ad);}
-.tile-4 .tile-ico{background:linear-gradient(145deg,#fbe3e4,#f3bfc2);}
+.tile-1 .tile-ico{background:var(--GRNP);}
+.tile-2 .tile-ico{background:var(--YELP);}
+.tile-3 .tile-ico{background:var(--YELP);}
+.tile-4 .tile-ico{background:var(--REDP);}
 
 .home-foot{padding:22px 14px 8px;text-align:center;}
 .admin-link{display:inline-flex;align-items:center;gap:6px;background:var(--W);border:1px solid var(--LINE);color:var(--MUT);padding:9px 16px;border-radius:20px;font-size:12px;cursor:pointer;}
@@ -193,3 +170,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   #print-area, #print-area *{visibility:visible;}
   #print-area{display:block !important;position:absolute;left:0;top:0;width:100%;padding:20px;}
 }
+
+/* correctif : la zone "ajouter une photo" est un <label> placé dans .fg */
+.fg label.photo-add{display:flex;align-items:center;justify-content:center;font-size:22px;margin:0;text-transform:none;letter-spacing:0;}
+.sync-badge{color:rgba(255,255,255,.7);}
