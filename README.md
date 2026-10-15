@@ -7,8 +7,11 @@
 - `admin.html` + `admin.js` — **Administration** (protégée par code) : statistiques, configuration, séances, sorties, exports (PC)
 - `suivi.html` + `suivi.js` + `manifest.json` — **Suivi** : à installer sur le téléphone de chaque étudiant qui dépose un exposé ou un rapport — statuts en temps réel, notifications, remarques du correcteur, bibliothèque "Source Vases d'Honneur"
 - `core.css` + `core.js` — fichiers partagés par les 3 interfaces (NE PAS RENOMMER NI DÉPLACER)
+- `export.js` — génération des fichiers Word (.docx) et Excel (.xlsx), sans Internet
+- `banniere.jpg` — bannière de l'Académie affichée en haut des écrans
 - `server.js` — petit serveur local qui permet à tous les appareils de partager les mêmes données
-- `data.json` — apparaîtra automatiquement ici après la première utilisation (c'est votre base de données)
+- `Demarrer-Windows.bat` — double-clic pour lancer le serveur sous Windows
+- Créés automatiquement à la première utilisation : `data.json` (la base de données), `photos/`, `sauvegardes/`
 
 **Gardez tous ces fichiers ensemble, dans le même dossier.**
 
@@ -19,9 +22,12 @@ Sans serveur, chaque appareil (tablette, PC, téléphone étudiant) garde ses do
 Avec `server.js` lancé sur le PC, tous les appareils se connectent au même endroit
 et voient donc les mêmes informations (présences, dépôts, corrections, notifications...).
 
-Le PC joue le rôle de "serveur" : il doit rester allumé, avec `server.js` lancé,
-pendant que la tablette et les téléphones sont utilisés.
+Le serveur **fusionne** les enregistrements fiche par fiche : la tablette, le PC et les téléphones peuvent
+enregistrer en même temps sans s'écraser. Les photos sont rangées dans le dossier `photos/` et une copie
+datée de la base est faite chaque jour dans `sauvegardes/`.
 
+Le voyant en haut de chaque écran indique l'état : **● Connecté au serveur** (vert),
+**● Synchronisation…** (jaune), **● Hors-ligne** (rouge).
 
 ---
 
@@ -35,6 +41,7 @@ pendant que la tablette et les téléphones sont utilisés.
 2. Ouvrir ce dossier
 3. **Windows** : Maj + clic droit dans le dossier → "Ouvrir la fenêtre PowerShell ici" (ou "Ouvrir dans le terminal")
    **Mac** : ouvrir Terminal, taper `cd ` puis glisser le dossier dans la fenêtre, appuyer sur Entrée
+   **Plus simple sous Windows** : double-cliquez sur `Demarrer-Windows.bat` (étapes 3 et 4 faites automatiquement).
 4. Taper la commande :
    ```
    node server.js
@@ -43,7 +50,7 @@ pendant que la tablette et les téléphones sont utilisés.
    ```
    Commission Exposé — serveur local démarré
    Sur cet ordinateur : http://localhost:8000
-   Sur la tablette (même Wi-Fi) : http://<IP-DE-CE-PC>:8000
+   Sur la tablette (même Wi-Fi) : http://192.168.1.24:8000   ← l'adresse réelle s'affiche
    ```
 6. **Laisser cette fenêtre ouverte** tant que vous utilisez l'application (ne pas la fermer).
 
@@ -94,8 +101,9 @@ n'est pas accessible sur ce réseau.
 ---
 
 ## Sauvegarde des données
-Toutes les données sont stockées dans le fichier `data.json`, créé automatiquement dans le même dossier que `server.js`.
-**Pensez à faire une copie régulière de ce fichier** (clé USB, cloud...) pour ne rien perdre en cas de problème sur le PC.
+Toutes les données sont dans `data.json` et le dossier `photos/` (même dossier que `server.js`).
+Une copie datée de la base est faite automatiquement chaque jour dans `sauvegardes/`.
+**Pensez à copier régulièrement le dossier complet** (clé USB, cloud...) pour ne rien perdre en cas de problème sur le PC.
 
 ## Ce que ce serveur n'est PAS
 C'est une solution simple pour un usage **local, sur un même réseau Wi-Fi** (ex: salle de la commission).
@@ -115,16 +123,28 @@ sur place ou en donnant le nom à la personne concernée.
 
 ---
 
-## Nouveautés — liste officielle des étudiants (Etudiants_par_commission_2)
-- La base contient maintenant les **115 étudiants**, les **16 commissions** et le **responsable de chaque commission**
+## Liste officielle des étudiants (déjà dans la base)
+- **115 étudiants**, **16 commissions** et le **responsable de chaque commission**
   (pour la commission rattachée à une église fille, le responsable est simplement « Église fille »).
 - Chaque étudiant de la liste a un **rapport de stage définitif** déjà enregistré (numéros `STG-DEF-…`).
-- Si vous aviez déjà des données (`data.json`), elles sont **conservées** : la liste officielle est simplement ajoutée
-  à la première ouverture.
-- **Rapport de stage** : tapez quelques lettres du nom puis touchez-le dans la liste → la commission et le responsable
-  se remplissent automatiquement (le numéro du responsable n'est alors plus obligatoire).
-- **Un rapport définitif n'apparaît plus dans l'Espace Correcteur** (ni les anciens dépôts d'un étudiant qui a déjà son définitif).
-- **Administration → Rapports** : liste des rapports définitifs par commission en **Word, Excel ou PDF**.
-  **Rapport annuel** : en Word (.docx) et maintenant aussi en **Excel**.
-- **Administration → Configuration → Commissions** : le responsable de chaque commission est modifiable.
-- La bannière `banniere.jpg` est incluse dans le dossier.
+- Si vous aviez déjà des données (`data.json`, de l'une ou l'autre version précédente), elles sont **conservées** :
+  la liste officielle est ajoutée automatiquement à la première ouverture.
+
+## Règles de fonctionnement
+- **Dépôt** (exposé ou rapport) : tapez quelques lettres du nom (sans se soucier des accents) puis touchez-le dans la liste.
+  Pour un rapport, la commission et le responsable se remplissent tout seuls (le numéro du responsable n'est alors pas obligatoire).
+- Au moins une **photo de couverture** est obligatoire ; elle est réduite automatiquement avant l'envoi.
+- **Rapport définitif** : il est enregistré comme définitif et **n'apparaît jamais dans l'Espace Correcteur**,
+  ni les anciens dépôts « à corriger » d'un étudiant qui a déjà son définitif. Pas de doublon si l'étudiant redépose son définitif.
+- Deux correcteurs ne peuvent pas prendre le même document.
+
+## Administration (code par défaut : 2026)
+- **Rapports** : compteurs (dont rapports définitifs et étudiants sans définitif), répartition par commission,
+  recherche et filtres, actions « Marquer définitif », « Annuler définitif », « Libérer » un document bloqué, « Supprimer ».
+- **Exposés** : mêmes outils, filtre par lieu de dépôt.
+- **Étudiants** : ajouter un étudiant, changer sa commission, le retirer.
+- **Configuration** : membres (nom, code, téléphone, situation…), responsables de commission, créneaux, motifs, lieux,
+  bibliothèque, méditations, quiz, et **code administrateur**. Les 4 membres fournis sont des exemples : remplacez-les.
+- **Exports Word / Excel** : 7 rapports prêts à imprimer, chacun en Word (.docx), Excel (.xlsx), aperçu et PDF :
+  rapports définitifs par commission, suivi des rapports, suivi des exposés, liste des étudiants,
+  journal de présence (année ou mois), sorties dans les églises filles, rapport d'évolution annuel.

@@ -20,6 +20,7 @@ const STATUT_INFO = {
   corrige_complet:{lbl:'Corrigé — complet, à récupérer', cls:'bg'},
   corrige_partiel:{lbl:'Corrigé — partiel, à récupérer', cls:'by'},
   retire:       {lbl:'Retiré', cls:'bg'},
+  clos:         {lbl:'Clôturé — rapport définitif reçu', cls:'bn'},
   definitif:    {lbl:'Rapport définitif — enregistré', cls:'bg'}
 };
 function openSuivi(){
@@ -29,7 +30,7 @@ function openSuivi(){
   document.getElementById('su-messages').innerHTML = '';
 }
 function renderSuivi(){
-  const q=document.getElementById('su-s').value.trim().toLowerCase();
+  const q=normName(document.getElementById('su-s').value);
   const docsEl=document.getElementById('su-docs');
   const msgEl=document.getElementById('su-messages');
   if(!q){
@@ -37,7 +38,7 @@ function renderSuivi(){
     msgEl.innerHTML='';
     return;
   }
-  const matchName = n => (n||'').toLowerCase().includes(q);
+  const matchName = n => normName(n).includes(q);
   const mesExposes = DB.expositions.filter(x=>matchName(x.etudiantNom));
   const mesRapports = DB.rapports.filter(x=>matchName(x.etudiantNom) || matchName(x.responsable&&x.responsable.nom) || matchName(x.mandataire&&x.mandataire.nom));
   const tous = [
@@ -49,7 +50,7 @@ function renderSuivi(){
     const info = STATUT_INFO[x.statut] || {lbl:x.statut, cls:'bn'};
     return `<div class="list-item" style="border:1px solid var(--LINE);border-radius:10px;margin-bottom:8px;">
       <div class="li-top"><div class="li-name">${escapeHtml(x.type)} — ${x.numero}</div><span class="badge ${info.cls}">${info.lbl}</span></div>
-      <div class="li-sub">Déposé le ${x.dateDepot}${x.heureDepot?' à '+x.heureDepot:''}${x.dateCorrection?' • Corrigé le '+x.dateCorrection:''}${x.dateRetrait?' • Retiré le '+x.dateRetrait:''}</div>
+      <div class="li-sub">${x.source==='liste officielle'?'Enregistré depuis la liste officielle':'Déposé le '+frDate(x.dateDepot)+(x.heureDepot?' à '+x.heureDepot:'')}${x.commission?' • '+escapeHtml(x.commission):''}${x.dateCorrection?' • Corrigé le '+frDate(x.dateCorrection):''}${x.dateRetrait?' • Retiré le '+frDate(x.dateRetrait):''}</div>
       ${x.commentaire ? `<div class="note-box ${x.statut==='corrige_complet'||x.statut==='retire'?'complet':'partiel'}" style="margin-top:8px;"><div class="note-lbl">Remarques du correcteur</div><div class="note-txt">${escapeHtml(x.commentaire)}</div></div>` : ''}
     </div>`;
   }).join('') : `<div class="empty"><div class="eico">📭</div><p>Aucun exposé ou rapport trouvé pour ce nom</p></div>`;
@@ -86,5 +87,6 @@ function biblioSwitch(classe){
 
 /* ================= INIT ================= */
 window.onRemoteUpdate = function(){
+  updateSyncBadge();
   if(document.getElementById('s-suivi').classList.contains('on')) renderSuivi();
 };

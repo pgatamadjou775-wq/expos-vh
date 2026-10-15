@@ -1,13 +1,13 @@
 /* ============================================================
    COMMISSION EXPOSÉ — Académie Vases d'Honneur
    core.js — Modèle de données partagé (Étudiant + Administration)
-   Les deux interfaces doivent être servies depuis la même origine
-   (même domaine / même dossier) pour partager les données via
-   localStorage + serveur local. Sans cela chaque interface aura
-   sa propre base.
+   Partagé par les 3 interfaces : Bienvenue (etudiant.html),
+   Suivi (suivi.html) et Administration (admin.html).
+   Toutes doivent être ouvertes depuis le serveur local (server.js)
+   pour partager les mêmes données.
    ============================================================ */
 
-const ADMIN_CODE = '2026';
+const ADMIN_CODE = '2026';   // code administrateur par défaut (modifiable dans Administration → Configuration)
 const RETARD_JOURS = 7;      // seuil "en retard" si non corrigé après ce délai
 const SEUIL_COMMISSION_FAIBLE = 50; // % en dessous duquel on alerte sur le taux de dépôt d'une commission
 const SEUIL_ABSENCES_DIMANCHE = 3;  // nombre de dimanches sans pointage avant alerte
@@ -217,6 +217,8 @@ function ensureOfficialData(db){
   if(!db.commissions) db.commissions=[];
   if(!db.rapports) db.rapports=[];
   // 1) étudiants : on retire les 5 étudiants d'exemple, on ajoute / met à jour la liste officielle
+  if(!db.tombstones) db.tombstones={};
+  db.etudiants.filter(e=>/^e[1-5]$/.test(e.id)).forEach(e=>{ db.tombstones[e.id]=1; });
   db.etudiants = db.etudiants.filter(e=>!/^e[1-5]$/.test(e.id));
   OFFICIEL_ETUDIANTS.forEach(o=>{
     const ex=db.etudiants.find(e=>e.id===o.id);
@@ -235,7 +237,16 @@ function ensureOfficialData(db){
   const ds=todayStr();
   OFFICIEL_ETUDIANTS.forEach((o,i)=>{
     const rid='rd-'+o.id;
-    if(db.rapports.find(r=>r.id===rid)) return;
+    if(db.tombstones && db.tombstones[rid]) return;
+    const ancien=db.rapports.find(r=>r.id===rid);
+    if(ancien){
+      // fiche créée par une version précédente : alignée sur la nouvelle liste
+      if(ancien.source==='import' || ancien.source==='liste officielle'){
+        Object.assign(ancien,{etudiantNom:o.nom, commission:o.commission, responsable:{nom:o.responsable, tel:''}, source:'liste officielle'});
+        if(!ancien.mandataire) ancien.mandataire=null;
+      }
+      return;
+    }
     if(db.rapports.find(r=>r.statut==='definitif' && normName(r.etudiantNom)===normName(o.nom))) return;
     db.rapports.push({
       id:rid, numero:'STG-DEF-'+String(i+1).padStart(3,'0'), etudiantNom:o.nom, tel:'',
@@ -251,25 +262,26 @@ function ensureOfficialData(db){
 function rapportDefinitifDe(nom){ const n=normName(nom); return (DB.rapports||[]).find(r=>r.statut==='definitif' && normName(r.etudiantNom)===n); }
 function commissionResponsable(nomCommission){ const c=(DB.commissions||[]).find(x=>x.nom===nomCommission); return c && c.responsable ? c.responsable : ''; }
 
-function writeLocal(json){
-  try{ localStorage.setItem(LS_KEY, json); }
-  catch(e){ console.warn('Stockage local plein — les données restent sur le serveur', e); }
-}
+/* ================= STOCKAGE LOCAL + SYNCHRONISATION AVEC LE SERVEUR =================
+   Chaque appareil garde une copie locale et envoie ses modifications au serveur (server.js),
+   qui les FUSIONNE fiche par fiche : la tablette, le PC et les téléphones peuvent enregistrer
+   en même temps sans s'écraser. Sans serveur : mode hors-ligne sur un seul appareil. */
+// Collections fusionnées fiche par fiche (par id)
+const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages'];
+// Paramètres fusionnés en bloc (la modification la plus récente gagne)
+const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode'];
 
 function applyDefaults(DB){
-  ['etudiants','membres','presences','expositions','rapports'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
+  RECORD_COLLECTIONS.forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
   if(!DB.creneaux || !DB.creneaux.length) DB.creneaux = seedDB().creneaux;
   if(!DB.compteurs) DB.compteurs = {expose:0,rapport:0};
   if(!DB.eglises || !DB.eglises.length) DB.eglises = seedDB().eglises;
-  if(!DB.commissions) DB.commissions = [{id:'co1',nom:'Commission Exposé',totalAttendu:0}];
+  if(!DB.commissions) DB.commissions = [];
   if(!DB.motifsPresence || !DB.motifsPresence.length) DB.motifsPresence = seedDB().motifsPresence;
-  if(!DB.sessions) DB.sessions = [];
-  if(!DB.sorties) DB.sorties = [];
-  if(!DB.bibliotheque) DB.bibliotheque = [];
-  if(!DB.meditations) DB.meditations = [];
-  if(!DB.quizBiblique) DB.quizBiblique = [];
-  if(!DB.messages) DB.messages = [];
-  (DB.membres||[]).forEach(m=>{
+  if(!DB.tombstones) DB.tombstones = {};
+  if(!DB.adminCode) DB.adminCode = ADMIN_CODE;
+  if(!DB._cfgU) DB._cfgU = 1;
+  DB.membres.forEach(m=>{
     if(m.lieu===undefined) m.lieu='';
     if(m.tel===undefined) m.tel='';
     if(m.financier===undefined) m.financier='Moyen';
@@ -277,57 +289,163 @@ function applyDefaults(DB){
     if(m.motifAbsence===undefined) m.motifAbsence='';
   });
 }
+// Suppression d'une fiche : elle est aussi retirée des autres appareils lors de la synchronisation
+function removeRecord(coll, id){
+  const i=(DB[coll]||[]).findIndex(r=>r.id===id);
+  if(i>=0) DB[coll].splice(i,1);
+  DB.tombstones[id]=Date.now();
+}
 
 let DB = null;
-function loadDB(){
-  try{
-    const raw = localStorage.getItem(LS_KEY);
-    DB = raw ? JSON.parse(raw) : seedDB();
-    applyDefaults(DB);
-  }catch(e){ DB = seedDB(); }
-  if(ensureOfficialData(DB)) writeLocal(JSON.stringify(DB));
-}
-function saveDB(){
-  const json = JSON.stringify(DB);
-  writeLocal(json);
-  fetch('/api/data', {method:'POST', headers:{'Content-Type':'application/json'}, body: json}).catch(()=>{});
-}
+let SNAP = {}, SNAP_CFG = '';
+let DIRTY = false, SYNC_BUSY = false, SERVER_CONNECTE = false, LAST_RENDER_SIG = '';
 
-let SERVER_CONNECTE = false;
-async function pullRemote(silent){
-  try{
-    const r = await fetch('/api/data', {cache:'no-store'});
-    if(!r.ok) throw new Error('bad status');
-    const txt = await r.text();
-    SERVER_CONNECTE = true;
-    if(txt && txt!=='null'){
-      const parsed = JSON.parse(txt);
-      DB = parsed;
-      applyDefaults(DB);
-      writeLocal(txt);
-      // base du serveur ancienne version : on y ajoute la liste officielle et on la renvoie au serveur
-      if(ensureOfficialData(DB)) saveDB();
-    }
-    if(typeof window.onRemoteUpdate === 'function') window.onRemoteUpdate();
-    if(!silent) toast('Données actualisées depuis le serveur','ok');
-  }catch(e){
-    SERVER_CONNECTE = false;
-    if(!silent) toast("Aucun serveur local détecté — mode hors-ligne (un seul appareil)",'ko');
+function recSig(r){ const c=Object.assign({},r); delete c._u; return JSON.stringify(c); }
+function cfgSig(db){ return JSON.stringify(CONFIG_KEYS.map(k=>db[k])); }
+function takeSnapshot(){
+  SNAP={};
+  RECORD_COLLECTIONS.forEach(k=>(DB[k]||[]).forEach(r=>{ SNAP[k+':'+r.id]=recSig(r); }));
+  SNAP_CFG=cfgSig(DB);
+}
+function stampChanges(){
+  const now=Date.now();
+  RECORD_COLLECTIONS.forEach(k=>(DB[k]||[]).forEach(r=>{
+    if(!r.id) r.id=nid();
+    if(SNAP[k+':'+r.id]!==recSig(r)) r._u=now;
+  }));
+  if(cfgSig(DB)!==SNAP_CFG) DB._cfgU=now;
+}
+function writeLocal(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+  catch(e){
+    // stockage local plein : on garde une copie sans les photos (elles restent sur le serveur)
+    try{
+      const light=JSON.parse(JSON.stringify(DB));
+      ['expositions','rapports'].forEach(k=>light[k].forEach(r=>{ r.photos=(r.photos||[]).filter(p=>!String(p).startsWith('data:')); }));
+      localStorage.setItem(LS_KEY, JSON.stringify(light));
+    }catch(e2){ console.warn('Stockage local indisponible', e2); }
   }
 }
-function manualRefresh(){ pullRemote(false); }
+function loadDB(){
+  let parsed=null;
+  try{ const raw=localStorage.getItem(LS_KEY); parsed = raw ? JSON.parse(raw) : null; }catch(e){ parsed=null; }
+  DB = parsed || seedDB();
+  applyDefaults(DB);
+  takeSnapshot();
+  const changed = ensureOfficialData(DB);
+  // appareil neuf : on lit d'abord le serveur avant d'envoyer quoi que ce soit
+  if(changed && parsed){ stampChanges(); DIRTY=true; }
+  takeSnapshot();
+  writeLocal();
+}
+function saveDB(){
+  stampChanges();
+  takeSnapshot();
+  DIRTY=true;
+  writeLocal();
+  syncNow();
+}
+function adoptRemote(remote){
+  DB=remote;
+  applyDefaults(DB);
+  takeSnapshot();
+  const changed=ensureOfficialData(DB);
+  if(changed){ stampChanges(); DIRTY=true; }   // base ancienne version : la mise à jour est renvoyée au serveur
+  takeSnapshot();
+  writeLocal();
+  const sig=JSON.stringify(DB);
+  if(sig!==LAST_RENDER_SIG){
+    LAST_RENDER_SIG=sig;
+    if(typeof window.onRemoteUpdate==='function'){ try{ window.onRemoteUpdate(); }catch(e){ console.error(e); } }
+  }
+}
+async function syncNow(manual){
+  if(SYNC_BUSY){ window._resync=true; return; }
+  SYNC_BUSY=true;
+  try{
+    let r;
+    if(DIRTY){
+      const sent=JSON.stringify(DB);
+      DIRTY=false;
+      r=await fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:sent,cache:'no-store'});
+      if(!r.ok){ DIRTY=true; throw new Error('HTTP '+r.status); }
+    } else {
+      r=await fetch('/api/data',{cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+    }
+    const txt=await r.text();
+    SERVER_CONNECTE=true;
+    if(!txt || txt==='null'){ DIRTY=true; window._resync=true; }      // serveur vide : on lui envoie nos données
+    else if(!DIRTY){ adoptRemote(JSON.parse(txt)); }                  // sinon on renverra d'abord nos modifications
+    if(manual) toast('Données actualisées depuis le serveur','ok');
+  }catch(e){
+    SERVER_CONNECTE=false;
+    if(manual) toast("Aucun serveur local détecté — mode hors-ligne (un seul appareil)",'ko');
+  }finally{
+    SYNC_BUSY=false;
+    updateSyncBadge();
+    if(window._resync){ window._resync=false; setTimeout(()=>syncNow(),50); }
+  }
+}
+function pullRemote(silent){ return syncNow(!silent); }
+function manualRefresh(){ syncNow(true); }
+function updateSyncBadge(){
+  document.querySelectorAll('.sync-badge').forEach(el=>{
+    el.textContent = SERVER_CONNECTE ? (DIRTY?'● Synchronisation…':'● Connecté au serveur') : '● Hors-ligne';
+    el.style.color = SERVER_CONNECTE ? (DIRTY?'#f0b90b':'#9be3c4') : '#ffb4b8';
+  });
+}
 
 function nid(){ return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function pad(n){ return String(n).padStart(2,'0'); }
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function nowTimeStr(){ const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes()); }
 function nowFull(){ return Date.now(); }
-function initials(name){ return (name||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(''); }
-function joursDepuis(dateMs){ return Math.floor((Date.now()-dateMs)/86400000); }
+function initials(name){ return String(name||'?').replace(/^(Mme|M\.|Dr)\s+/i,'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(''); }
+function joursDepuis(dateMs){ return Math.floor((Date.now()-(dateMs||Date.now()))/86400000); }
 function joursDepuisStr(ds){ if(!ds) return 0; return Math.floor((Date.now() - new Date(ds+'T00:00:00').getTime())/86400000); }
 function addDaysStr(ds,n){ const d=new Date(ds+'T00:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function addMonthsStr(ds,n){ const d=new Date(ds+'T00:00:00'); d.setMonth(d.getMonth()+n); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function frDate(ds){ const p=String(ds||'').split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : (ds||''); }
+function safeFileName(s){ return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,''); }
+// Libellés des statuts (identiques sur toutes les interfaces)
+const STATUT_LBL = {
+  depose:['Déposé — à corriger','bn'], en_correction:['En correction','by'],
+  corrige_complet:['Corrigé complet','bg'], corrige_partiel:['Corrigé partiel','by'],
+  retire:['Retiré','bg'], definitif:['Définitif','bg'], clos:['Clôturé (définitif reçu)','bn']
+};
+function statutLabel(s){ return STATUT_LBL[s] || ['—','bn']; }
+/* Photos : réduites avant enregistrement (dépôt rapide, base légère) */
+function compressImage(file, maxSide, quality){
+  maxSide=maxSide||1280; quality=quality||0.72;
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(reader.error);
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        try{
+          const k=Math.min(1, maxSide/Math.max(img.width,img.height));
+          const cv=document.createElement('canvas'); cv.width=Math.round(img.width*k); cv.height=Math.round(img.height*k);
+          cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+          resolve(cv.toDataURL('image/jpeg',quality));
+        }catch(err){ resolve(e.target.result); }
+      };
+      img.onerror=()=>reject(new Error('Image illisible'));
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+/* Téléchargement d'un fichier généré (Word / Excel) */
+function downloadBytes(bytes, fileName, mime){
+  const blob=new Blob([bytes],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=fileName; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },4000);
+}
 const MOIS_LBL=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
 function niveauBadgeClass(niveau){
@@ -361,5 +479,6 @@ function toast(msg,type){
 }
 
 loadDB();
-pullRemote(true);
-setInterval(()=>pullRemote(true), 6000);
+LAST_RENDER_SIG=JSON.stringify(DB);
+syncNow();
+setInterval(()=>syncNow(), 5000);

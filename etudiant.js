@@ -83,6 +83,20 @@ function rpNomPick(id){
   const def=rapportDefinitifDe(e.nom);
   document.getElementById('rp-nom-info').innerHTML = def ? `✅ Rapport définitif déjà enregistré (n° ${escapeHtml(def.numero)}).` : `Commission : <b>${escapeHtml(e.commission||'—')}</b>`;
 }
+function exNomSearch(){
+  const q=normName(document.getElementById('ex-nom').value);
+  const list=document.getElementById('ex-nom-list');
+  if(q.length<2){ list.classList.add('hidden'); list.innerHTML=''; return; }
+  const res=DB.etudiants.filter(e=>normName(e.nom).includes(q)).slice(0,25);
+  if(!res.length){ list.classList.add('hidden'); list.innerHTML=''; return; }
+  list.classList.remove('hidden');
+  list.innerHTML = res.map(e=>`<div class="pick-item" onclick="exNomPick('${e.id}')"><div class="av">${escapeHtml(initials(e.nom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(e.nom)}</div><div class="pk-sub">${escapeHtml(e.commission||'')}</div></div></div>`).join('');
+}
+function exNomPick(id){
+  const e=DB.etudiants.find(x=>x.id===id); if(!e) return;
+  document.getElementById('ex-nom').value=e.nom;
+  const list=document.getElementById('ex-nom-list'); list.classList.add('hidden'); list.innerHTML='';
+}
 function rpCommissionChange(){
   const inp=document.getElementById('rp-resp-nom');
   const resp=commissionResponsable(document.getElementById('rp-commission').value);
@@ -109,13 +123,12 @@ function renderPhotoGrid(key, gridId){
 }
 function addPhoto(key, gridId, input){
   const file=input.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    photoStore[key].push(e.target.result);
+  toast('Préparation de la photo…','ok');
+  compressImage(file,1280,0.72).then(dataUrl=>{
+    photoStore[key].push(dataUrl);
     renderPhotoGrid(key, gridId);
     if(key==='ex') exToggleChk(); else if(key==='rp') rpToggleChk();
-  };
-  reader.readAsDataURL(file);
+  }).catch(()=>toast('Impossible de lire cette photo','ko'));
 }
 function removePhoto(key, gridId, i){
   photoStore[key].splice(i,1);
@@ -143,14 +156,15 @@ function openPresence(){
   prFilter();
 }
 function prFilter(){
-  const q=document.getElementById('pr-s').value.toLowerCase();
+  const q=normName(document.getElementById('pr-s').value);
   const list=document.getElementById('pr-list');
-  const membres = DB.membres.filter(m=>m.nom.toLowerCase().includes(q));
-  list.innerHTML = membres.length ? membres.map(m=>`<div class="pick-item" onclick="prSelect('${m.id}')"><div class="av">${initials(m.nom)}</div><div><div class="pk-name">${m.nom}</div></div></div>`).join('')
+  const membres = DB.membres.filter(m=>normName(m.nom).includes(q));
+  list.innerHTML = membres.length ? membres.map(m=>`<div class="pick-item" onclick="prSelect('${m.id}')"><div class="av">${escapeHtml(initials(m.nom))}</div><div><div class="pk-name">${escapeHtml(m.nom)}</div></div></div>`).join('')
     : `<div class="empty"><div class="eico">🔍</div><p>Aucun membre trouvé</p></div>`;
 }
 function prSelect(id){
   prSelMembre = DB.membres.find(m=>m.id===id);
+  if(!prSelMembre) return;
   document.getElementById('pr-search').classList.add('hidden');
   document.getElementById('pr-form').classList.remove('hidden');
   document.getElementById('pr-who').innerHTML=`<div class="av" style="width:44px;height:44px;">${initials(prSelMembre.nom)}</div><div><div style="font-weight:700;font-size:15px;">${prSelMembre.nom}</div><div class="hint">Arrivée à ${nowTimeStr()}</div></div>`;
@@ -202,6 +216,7 @@ function prCheckSalle(){
   }
 }
 function confirmArrivee(){
+  if(!prSelMembre){ goHome(); return; }
   const motifEl=document.querySelector('#pr-motifs .chip.sel');
   const motif = motifEl ? motifEl.dataset.m : 'Permanence';
   const jour=document.getElementById('pr-jour').value;
@@ -248,10 +263,11 @@ function openExpose(){
   photoStore.ex=[];
   document.getElementById('ex-nom').value=''; document.getElementById('ex-tel').value=''; document.getElementById('ex-moderateur').value='';
   document.getElementById('ex-nom-classe').value='';
+  document.getElementById('ex-nom-list').classList.add('hidden');
   document.getElementById('ex-themes-list').innerHTML=''; addThemeRow('ex-themes-list');
   document.getElementById('ex-chk').checked=false; document.getElementById('ex-chk').disabled=true;
   resetLieu('ex');
-  renderPhotoGrid('ex','ex-photos'); exToggleBtn();
+  renderPhotoGrid('ex','ex-photos'); exToggleChk();
   exSwitch('deposer');
   document.getElementById('ex-success').classList.add('hidden');
 }
@@ -280,6 +296,7 @@ function confirmDepotExpose(){
   const nom=document.getElementById('ex-nom').value.trim();
   if(!nom){ toast('Le nom de l\'étudiant est requis','ko'); return; }
   if(!document.getElementById('ex-moderateur').value.trim()){ toast('Le nom du modérateur est requis','ko'); return; }
+  if(!photoStore.ex.length){ toast('Ajoutez au moins une photo de couverture','ko'); return; }
   DB.compteurs.expose++;
   const numero = 'EXP-'+todayStr().replace(/-/g,'')+'-'+String(DB.compteurs.expose).padStart(3,'0');
   const rec={
@@ -301,12 +318,12 @@ function confirmDepotExpose(){
   toast('Exposé déposé','ok');
 }
 function renderExRetrait(){
-  const q=document.getElementById('ex-r-s').value.toLowerCase();
+  const q=normName(document.getElementById('ex-r-s').value);
   const list=document.getElementById('ex-r-list');
   let d=DB.expositions.filter(x=>x.statut==='corrige_complet'||x.statut==='corrige_partiel');
-  if(q) d=d.filter(x=>x.etudiantNom.toLowerCase().includes(q)||x.numero.toLowerCase().includes(q));
+  if(q) d=d.filter(x=>normName(x.etudiantNom).includes(q)||normName(x.numero).includes(q));
   d.sort((a,b)=>b.tsDepot-a.tsDepot);
-  list.innerHTML = d.length ? d.map(x=>`<div class="pick-item" onclick="openExRetraitDetail('${x.id}')"><div class="av">${initials(x.etudiantNom)}</div><div style="flex:1;"><div class="pk-name">${x.etudiantNom}</div><div class="pk-sub">${x.numero} • ${x.classe} • ${x.phase}</div></div><span class="badge ${x.statut==='corrige_complet'?'bg':'by'}">${x.statut==='corrige_complet'?'Complet':'Partiel'}</span></div>`).join('')
+  list.innerHTML = d.length ? d.map(x=>`<div class="pick-item" onclick="openExRetraitDetail('${x.id}')"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.classe} • ${x.phase}</div></div><span class="badge ${x.statut==='corrige_complet'?'bg':'by'}">${x.statut==='corrige_complet'?'Complet':'Partiel'}</span></div>`).join('')
     : `<div class="empty"><div class="eico">📭</div><p>Aucun exposé corrigé disponible pour ce nom</p></div>`;
 }
 function openExRetraitDetail(id){
@@ -316,7 +333,7 @@ function openExRetraitDetail(id){
   box.classList.remove('hidden');
   box.innerHTML=`
     <div class="card"><div class="card-b">
-      <div style="font-weight:700;font-size:15px;">${x.etudiantNom}</div>
+      <div style="font-weight:700;font-size:15px;">${escapeHtml(x.etudiantNom)}</div>
       <div class="hint" style="margin-bottom:10px;">${x.numero} • ${x.classe} • ${x.phase}${x.lieu?' • '+escapeHtml(x.lieu):''}</div>
       <div class="note-box ${x.statut==='corrige_complet'?'complet':'partiel'}">
         <div class="note-lbl">${x.statut==='corrige_complet'?'✅ Complètement corrigé':'⚠️ Partiellement corrigé'}</div>
@@ -352,7 +369,7 @@ function openRapport(){
   document.getElementById('rp-phase').value='1ère correction'; rpPhaseInfo(); rpRespAuto='';
   document.getElementById('rp-chk').checked=false; document.getElementById('rp-chk').disabled=true;
   resetLieu('rp'); fillCommissionSelect('rp'); rpCommissionChange();
-  renderPhotoGrid('rp','rp-photos'); rpToggleBtn();
+  renderPhotoGrid('rp','rp-photos'); rpToggleChk();
   rpSwitch('deposer');
   document.getElementById('rp-success').classList.add('hidden');
 }
@@ -382,6 +399,7 @@ function confirmDepotRapport(){
   const respNom=document.getElementById('rp-resp-nom').value.trim();
   const respTel=document.getElementById('rp-resp-tel').value.trim();
   if(!nom){ toast('Le nom de l\'étudiant est requis','ko'); return; }
+  if(!photoStore.rp.length){ toast('Ajoutez au moins une photo de couverture','ko'); return; }
   // Le numéro n'est exigé que si le responsable n'est pas celui de la liste officielle (numéros non communiqués)
   const respOfficiel = respNom && normName(respNom)===normName(commissionResponsable(document.getElementById('rp-commission').value));
   if(!respNom || (!respTel && !respOfficiel)){ toast('Le nom et le numéro du responsable de la commission sont requis','ko'); return; }
@@ -423,12 +441,12 @@ function confirmDepotRapport(){
   toast(definitif ? 'Rapport définitif enregistré' : 'Rapport déposé — le responsable de commission et le mandataire ont été notifiés','ok');
 }
 function renderRpRetrait(){
-  const q=document.getElementById('rp-r-s').value.toLowerCase();
+  const q=normName(document.getElementById('rp-r-s').value);
   const list=document.getElementById('rp-r-list');
   let d=DB.rapports.filter(x=>x.statut==='corrige_complet'||x.statut==='corrige_partiel');
-  if(q) d=d.filter(x=>x.etudiantNom.toLowerCase().includes(q)||x.numero.toLowerCase().includes(q));
+  if(q) d=d.filter(x=>normName(x.etudiantNom).includes(q)||normName(x.numero).includes(q));
   d.sort((a,b)=>b.tsDepot-a.tsDepot);
-  list.innerHTML = d.length ? d.map(x=>`<div class="pick-item" onclick="openRpRetraitDetail('${x.id}')"><div class="av">${initials(x.etudiantNom)}</div><div style="flex:1;"><div class="pk-name">${x.etudiantNom}</div><div class="pk-sub">${x.numero} • ${x.phase}</div></div><span class="badge ${x.statut==='corrige_complet'?'bg':'by'}">${x.statut==='corrige_complet'?'Complet':'Partiel'}</span></div>`).join('')
+  list.innerHTML = d.length ? d.map(x=>`<div class="pick-item" onclick="openRpRetraitDetail('${x.id}')"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.phase}</div></div><span class="badge ${x.statut==='corrige_complet'?'bg':'by'}">${x.statut==='corrige_complet'?'Complet':'Partiel'}</span></div>`).join('')
     : `<div class="empty"><div class="eico">📭</div><p>Aucun rapport corrigé disponible pour ce nom</p></div>`;
 }
 function openRpRetraitDetail(id){
@@ -438,7 +456,7 @@ function openRpRetraitDetail(id){
   box.classList.remove('hidden');
   box.innerHTML=`
     <div class="card"><div class="card-b">
-      <div style="font-weight:700;font-size:15px;">${x.etudiantNom}</div>
+      <div style="font-weight:700;font-size:15px;">${escapeHtml(x.etudiantNom)}</div>
       <div class="hint" style="margin-bottom:10px;">${x.numero} • ${x.phase}${x.lieu?' • '+escapeHtml(x.lieu):''}</div>
       <div class="note-box ${x.statut==='corrige_complet'?'complet':'partiel'}">
         <div class="note-lbl">${x.statut==='corrige_complet'?'✅ Complètement corrigé':'⚠️ Partiellement corrigé'}</div>
@@ -475,10 +493,10 @@ function openCorrection(){
   corUser=null;
 }
 function corFilterNom(){
-  const q=document.getElementById('cor-nom').value.toLowerCase();
+  const q=normName(document.getElementById('cor-nom').value);
   const list=document.getElementById('cor-nom-list');
   if(!q){ list.innerHTML=''; return; }
-  const res=DB.membres.filter(m=>m.nom.toLowerCase().includes(q));
+  const res=DB.membres.filter(m=>normName(m.nom).includes(q));
   list.innerHTML=res.map(m=>`<div class="pick-item" onclick="corPick('${m.id}')"><div class="av">${initials(m.nom)}</div><div class="pk-name">${m.nom}</div></div>`).join('') || `<div class="empty">Aucun membre trouvé</div>`;
 }
 function corPick(id){
@@ -490,8 +508,8 @@ function corPick(id){
 function corAuth(){
   const nomVal=document.getElementById('cor-nom').value.trim();
   const code=document.getElementById('cor-code').value.trim();
-  const m = corUser && corUser.nom===nomVal ? corUser : DB.membres.find(x=>x.nom.toLowerCase()===nomVal.toLowerCase());
-  if(!m || m.code!==code){ toast('Nom ou code incorrect','ko'); return; }
+  const m = (corUser && corUser.nom===nomVal ? DB.membres.find(x=>x.id===corUser.id) : null) || DB.membres.find(x=>normName(x.nom)===normName(nomVal));
+  if(!m || String(m.code)!==code){ toast('Nom ou code incorrect','ko'); return; }
   corUser=m;
   document.getElementById('cor-auth').classList.add('hidden');
   document.getElementById('cor-main').classList.remove('hidden');
@@ -518,11 +536,12 @@ function renderCorLists(){
   const mine=data.filter(x=>x.statut==='en_correction' && x.correcteur===corUser.nom && corVisible(x));
   const dispo=data.filter(x=>x.statut==='depose' && corVisible(x));
   const mineEl=document.getElementById('cor-mine'), dispoEl=document.getElementById('cor-dispo');
-  mineEl.innerHTML = mine.length ? mine.map(x=>`<div class="pick-item" onclick="corOpenFinaliser('${x.id}')"><div class="av">${initials(x.etudiantNom)}</div><div style="flex:1;"><div class="pk-name">${x.etudiantNom}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase}${x.commentaireBrouillon?' • 💾 brouillon enregistré':''}</div></div><span class="badge by">En cours</span></div>`).join('') : `<div class="empty">Aucune correction en cours</div>`;
-  dispoEl.innerHTML = dispo.length ? dispo.map(x=>`<div class="pick-item"><div class="av">${initials(x.etudiantNom)}</div><div style="flex:1;"><div class="pk-name">${x.etudiantNom}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase} • déposé ${x.dateDepot}</div></div><button class="btn-sm btn-g" onclick="corPrendre('${x.id}')">Prendre</button></div>`).join('') : `<div class="empty">Aucun document disponible pour le moment</div>`;
+  mineEl.innerHTML = mine.length ? mine.map(x=>`<div class="pick-item" onclick="corOpenFinaliser('${x.id}')"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase}${x.commentaireBrouillon?' • 💾 brouillon enregistré':''}</div></div><span class="badge by">En cours</span></div>`).join('') : `<div class="empty">Aucune correction en cours</div>`;
+  dispoEl.innerHTML = dispo.length ? dispo.map(x=>`<div class="pick-item"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase} • déposé ${x.dateDepot}</div></div><button class="btn-sm btn-g" onclick="corPrendre('${x.id}')">Prendre</button></div>`).join('') : `<div class="empty">Aucun document disponible pour le moment</div>`;
 }
 function corPrendre(id){
   const x=corDB().find(d=>d.id===id); if(!x) return;
+  if(x.statut!=='depose'){ toast('Ce document a déjà été pris par un autre correcteur','ko'); renderCorLists(); return; }
   x.statut='en_correction'; x.correcteur=corUser.nom; x.tsDebutCorrection=nowFull();
   notifyDoc(x, `Votre ${corType==='expose'?'exposé':'rapport'} n° ${x.numero} est en cours de correction.`);
   saveDB(); renderCorLists(); toast('Document pris en correction','ok');
@@ -534,8 +553,9 @@ function corOpenFinaliser(id){
   box.classList.remove('hidden');
   box.innerHTML=`
     <div class="card"><div class="card-b">
-      <div style="font-weight:700;font-size:15px;">${x.etudiantNom}</div>
+      <div style="font-weight:700;font-size:15px;">${escapeHtml(x.etudiantNom)}</div>
       <div class="hint" style="margin-bottom:12px;">${x.numero} • ${x.classe||''} • ${x.phase}</div>
+      ${x.photos && x.photos.length ? `<div class="photo-grid">${x.photos.map(p=>`<a class="photo-thumb" href="${escapeHtml(p)}" target="_blank"><img src="${escapeHtml(p)}"></a>`).join('')}</div>` : ''}
       ${x.themes && x.themes.length ? `<div class="hint" style="margin-bottom:10px;">Thèmes : ${x.themes.map(escapeHtml).join(', ')}</div>` : ''}
       <div class="fg"><label>Résultat de la correction</label>
         <div class="chips">
@@ -563,7 +583,8 @@ function corPickResult(el){
   el.classList.add('sel');
 }
 function corFinaliser(id){
-  const x=corDB().find(d=>d.id===id); if(!x) return;
+  const x=corDB().find(d=>d.id===id);
+  if(!x){ toast('Document introuvable (supprimé ?)','ko'); corSwitch(corType); return; }
   const resEl=document.querySelector('#cor-detail .chip.sel');
   x.statut = resEl ? resEl.dataset.v : 'corrige_complet';
   x.commentaire = document.getElementById('cor-comment').value.trim();
@@ -586,4 +607,5 @@ window.onRemoteUpdate = function(){
   if(document.getElementById('s-expose').classList.contains('on') && !document.getElementById('ex-retirer').classList.contains('hidden')) renderExRetrait();
   if(document.getElementById('s-rapport').classList.contains('on') && !document.getElementById('rp-retirer').classList.contains('hidden')) renderRpRetrait();
   if(!document.getElementById('cor-main').classList.contains('hidden')) renderCorLists();
+  updateSyncBadge();
 };

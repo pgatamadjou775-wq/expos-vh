@@ -11,6 +11,20 @@
   .page-body{padding:16px;padding-bottom:60px;}
   .sub-card{border:1.5px dashed var(--LINE);border-radius:12px;padding:12px;margin-bottom:12px;}
   .sub-card h4{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--GRN);margin-bottom:8px;}
+  .filters{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;padding:12px 16px;border-bottom:1px solid var(--LINE);}
+  .filters input,.filters select{padding:10px;border:1.5px solid var(--LINE);border-radius:9px;font-size:13.5px;background:var(--BG);min-width:0;}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+  .btn-xs{padding:6px 10px;border-radius:7px;font-size:11.5px;font-weight:700;border:none;cursor:pointer;}
+  .b-del{background:var(--REDP);color:var(--RED);} .b-ok{background:var(--GRNP);color:var(--GRN);} .b-y{background:var(--YELP);color:var(--YELD);}
+  .exp-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;border-bottom:1px solid var(--LINE);flex-wrap:wrap;}
+  .exp-row:last-child{border-bottom:none;}
+  .exp-t{font-weight:700;font-size:14px;} .exp-s{font-size:11.5px;color:var(--MUT);margin-top:2px;}
+  .exp-btns{display:flex;gap:6px;flex-wrap:wrap;}
+  .exp-btns button{padding:9px 12px;border-radius:8px;border:none;font-weight:700;font-size:12px;cursor:pointer;}
+  .bw{background:#2b579a;color:#fff;} .bx{background:#217346;color:#fff;} .bp{background:var(--LINE);color:var(--INK);}
+  .inline-in{padding:5px 7px;border:1px solid var(--LINE);border-radius:6px;font-size:12.5px;}
+  .grp-h{padding:9px 16px;background:var(--GRNP);color:var(--GRN);font-weight:800;font-size:12.5px;}
+  @media (max-width:640px){ .filters{grid-template-columns:1fr;} }
   .alert-banner{background:var(--REDP);border:1.5px solid var(--RED);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--RED);font-weight:600;margin-bottom:10px;}
 </style>
 </head>
@@ -23,16 +37,19 @@
       <div class="scr-title">Administration &amp; Statistiques</div>
     </div>
     <div class="scr-sub" style="margin-left:0;">Académie Vases d'Honneur — Commission Exposé (interface distincte du côté étudiant)</div>
-    <button class="btn-sm" style="margin-top:10px;background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">🔄 Actualiser depuis le serveur</button>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap;">
+      <button class="btn-sm" style="background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">🔄 Actualiser depuis le serveur</button>
+      <span class="sync-badge">●</span>
+    </div>
   </div>
 
   <div class="page-body">
 
     <div id="ad-auth">
       <div class="card"><div class="card-b">
-        <div class="fg"><label>Code administrateur</label><input type="password" inputmode="numeric" id="ad-code" placeholder="••••"></div>
+        <div class="fg"><label>Code administrateur</label><input type="password" inputmode="numeric" id="ad-code" placeholder="••••" onkeydown="if(event.key==='Enter')adAuth()"></div>
         <button class="btn btn-g" onclick="adAuth()">Accéder</button>
-        <div class="hint" style="margin-top:10px;">Code par défaut : 2026 (modifiable dans le code source). Cette interface est indépendante du fichier étudiant ; les deux partagent les mêmes données uniquement si servis depuis la même origine web.</div>
+        <div class="hint" style="margin-top:10px;">Code par défaut : 2026 — modifiable dans l'onglet Configuration.</div>
       </div></div>
     </div>
 
@@ -41,9 +58,10 @@
         <button id="ad-tab-membres" class="on" onclick="adSwitch('membres')">Membres</button>
         <button id="ad-tab-expose" onclick="adSwitch('expose')">Exposés</button>
         <button id="ad-tab-rapport" onclick="adSwitch('rapport')">Rapports</button>
+        <button id="ad-tab-etudiants" onclick="adSwitch('etudiants')">Étudiants</button>
         <button id="ad-tab-config" onclick="adSwitch('config')">Configuration</button>
         <button id="ad-tab-seances" onclick="adSwitch('seances')">Séances &amp; Sorties</button>
-        <button id="ad-tab-export" onclick="adSwitch('export')">Rapport annuel</button>
+        <button id="ad-tab-export" onclick="adSwitch('export')">📥 Exports Word / Excel</button>
       </div>
 
       <!-- MEMBRES -->
@@ -65,7 +83,13 @@
           <div class="kpi kpi-g"><div class="kv" id="ade-corrige">0</div><div class="kl">Corrigés</div></div>
           <div class="kpi kpi-r"><div class="kv" id="ade-retard">0</div><div class="kl">En retard</div></div>
         </div>
-        <div class="card"><div class="card-h">Suivi des exposés</div><div id="ad-e-list"></div></div>
+        <div class="card"><div class="card-h">Suivi des exposés</div>
+          <div class="filters">
+            <input type="text" id="ade-q" placeholder="🔍 Nom ou numéro..." oninput="renderAdDocs('expose')">
+            <select id="ade-fl" onchange="renderAdDocs('expose')"></select>
+            <select id="ade-fs" onchange="renderAdDocs('expose')"></select>
+          </div>
+          <div id="ad-e-list"></div></div>
       </div>
 
       <!-- RAPPORTS -->
@@ -75,17 +99,46 @@
           <div class="kpi kpi-y"><div class="kv" id="adr-encours">0</div><div class="kl">En correction</div></div>
           <div class="kpi kpi-g"><div class="kv" id="adr-corrige">0</div><div class="kl">Corrigés</div></div>
           <div class="kpi kpi-r"><div class="kv" id="adr-retard">0</div><div class="kl">En retard</div></div>
+          <div class="kpi kpi-g"><div class="kv" id="adr-definitif">0</div><div class="kl">Rapports définitifs</div></div>
+          <div class="kpi kpi-r"><div class="kv" id="adr-manquant">0</div><div class="kl">Étudiants sans définitif</div></div>
         </div>
         <div class="card"><div class="card-h">Rapports de stage définitifs — liste par commission</div><div class="card-b">
           <div class="hint" style="margin-bottom:8px;">Liste prête à imprimer, avec le responsable de chaque commission.</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn-sm btn-g" onclick="exportDefinitifs('docx')">📝 Word</button>
-            <button class="btn-sm" style="background:#217346;color:#fff;" onclick="exportDefinitifs('xlsx')">📊 Excel</button>
-            <button class="btn-sm btn-ghost" onclick="exportDefinitifs('pdf')">🖨 Imprimer / PDF</button>
+          <div class="exp-btns">
+            <button class="bw" onclick="runExport('definitifs','docx')">📝 Word</button>
+            <button class="bx" onclick="runExport('definitifs','xlsx')">📊 Excel</button>
+            <button class="bp" onclick="runExport('definitifs','print')">🖨 Imprimer / PDF</button>
           </div>
         </div></div>
-        <div class="card"><div class="card-h">Répartition des rapports par commission</div><div class="card-b" id="ad-r-commission"></div></div>
-        <div class="card"><div class="card-h">Suivi des rapports de stage</div><div id="ad-r-list"></div></div>
+        <div class="card"><div class="card-h">Rapports définitifs par commission</div><div class="card-b" id="ad-r-commission"></div></div>
+        <div class="card"><div class="card-h">Suivi des rapports de stage</div>
+          <div class="filters">
+            <input type="text" id="adr-q" placeholder="🔍 Nom ou numéro..." oninput="renderAdDocs('rapport')">
+            <select id="adr-fc" onchange="renderAdDocs('rapport')"></select>
+            <select id="adr-fs" onchange="renderAdDocs('rapport')"></select>
+          </div>
+          <div id="ad-r-list"></div></div>
+      </div>
+
+      <!-- ETUDIANTS -->
+      <div id="ad-etudiants" class="hidden">
+        <div class="kpi-grid">
+          <div class="kpi kpi-n"><div class="kv" id="ads-total">0</div><div class="kl">Étudiants inscrits</div></div>
+          <div class="kpi kpi-g"><div class="kv" id="ads-com">0</div><div class="kl">Commissions</div></div>
+        </div>
+        <div class="card"><div class="card-h">Ajouter un étudiant</div><div class="card-b">
+          <div class="fg-row">
+            <div class="fg"><label>Nom complet</label><input type="text" id="ads-new-nom" placeholder="NOM Prénoms"></div>
+            <div class="fg"><label>Commission</label><select id="ads-new-com"></select></div>
+          </div>
+          <button class="btn-sm btn-g" style="width:100%;" onclick="addEtudiant()">+ Ajouter l'étudiant</button>
+        </div></div>
+        <div class="card"><div class="card-h">Étudiants par commission</div>
+          <div class="filters" style="grid-template-columns:2fr 1fr;">
+            <input type="text" id="ads-q" placeholder="🔍 Rechercher un nom..." oninput="renderAdEtudiants()">
+            <select id="ads-fc" onchange="renderAdEtudiants()"></select>
+          </div>
+          <div id="ads-list"></div></div>
       </div>
 
       <!-- CONFIGURATION -->
@@ -162,6 +215,13 @@
             <button class="btn-sm btn-g" style="width:100%;margin-top:8px;" onclick="addQuiz()">+ Programmer ce passage</button>
           </div>
         </div></div>
+
+        <div class="card" style="margin-top:16px;"><div class="card-h">Code administrateur</div><div class="card-b">
+          <div class="fg-row">
+            <input class="inline-in" type="password" inputmode="numeric" id="ad-newcode" placeholder="Nouveau code (4 caractères minimum)">
+            <button class="btn-sm btn-g" onclick="changeAdminCode()">Modifier le code</button>
+          </div>
+        </div></div>
       </div>
 
       <!-- SEANCES & SORTIES -->
@@ -218,15 +278,14 @@
       <!-- EXPORT -->
       <div id="ad-export" class="hidden">
         <div class="card"><div class="card-b">
-          <div class="fg"><label>Année</label><select id="ad-ex-year"></select></div>
-          <button class="btn btn-g" onclick="renderAnnualPreview()">Afficher l'aperçu</button>
+          <div class="fg-row">
+            <div class="fg"><label>Année</label><select id="ad-ex-year"></select></div>
+            <div class="fg"><label>Mois (présences)</label><select id="ad-ex-month"></select></div>
+          </div>
+          <div class="hint">Fichiers Word (.docx) et Excel (.xlsx) prêts à imprimer — en-têtes de tableau répétés sur chaque page, numéros de page. Fonctionne sans Internet.</div>
         </div></div>
-        <div class="card"><div class="card-h">Aperçu du rapport d'évolution</div><div class="card-b" id="ad-ex-preview"></div></div>
-        <div style="display:flex;gap:10px;">
-          <button class="btn btn-r" onclick="exportAnnualPDF()">📄 Télécharger en PDF</button>
-          <button class="btn btn-g" onclick="exportAnnualWord()">📝 Télécharger en Word</button>
-          <button class="btn" style="background:#217346;color:#fff;" onclick="exportAnnualExcel()">📊 Télécharger en Excel</button>
-        </div>
+        <div class="card" id="ad-ex-list"></div>
+        <div class="card"><div class="card-h">Aperçu</div><div class="card-b" id="ad-ex-preview" style="overflow-x:auto;"><div class="empty">Cliquez sur « Aperçu » pour afficher un rapport ici.</div></div></div>
       </div>
 
     </div>

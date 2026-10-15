@@ -4,28 +4,38 @@
    ============================================================ */
 
 function adAuth(){
-  if(document.getElementById('ad-code').value.trim()!==ADMIN_CODE){ toast('Code incorrect','ko'); return; }
+  if(document.getElementById('ad-code').value.trim()!==String(DB.adminCode||ADMIN_CODE)){ toast('Code incorrect','ko'); return; }
+  try{ sessionStorage.setItem('CE_ADMIN','1'); }catch(e){}
+  showAdmin();
+}
+function showAdmin(){
   document.getElementById('ad-auth').classList.add('hidden');
   document.getElementById('ad-main').classList.remove('hidden');
-  adSwitch('membres');
+  adSwitch(currentAdminTab);
 }
 let currentAdminTab='membres';
 function adSwitch(tab){
   currentAdminTab=tab;
-  ['membres','expose','rapport','config','seances','export'].forEach(t=>{
+  ['membres','expose','rapport','etudiants','config','seances','export'].forEach(t=>{
     document.getElementById('ad-tab-'+t).classList.toggle('on', t===tab);
     document.getElementById('ad-'+t).classList.toggle('hidden', t!==tab);
   });
   if(tab==='membres'){ renderAdMembres(); renderAdMembresAlertes(); renderAdMembresBilan(); }
-  if(tab==='expose') renderAdDocs('expose');
-  if(tab==='rapport') renderAdDocs('rapport');
+  if(tab==='expose'){ fillDocFilters('expose'); renderAdDocs('expose'); }
+  if(tab==='rapport'){ fillDocFilters('rapport'); renderAdDocs('rapport'); }
+  if(tab==='etudiants') renderAdEtudiants(true);
   if(tab==='config'){ renderAdMembresManage(); renderAdCreneaux(); renderAdMotifs(); renderAdEglises(); renderAdCommissions(); renderAdBiblio(); renderAdMeditations(); renderAdQuiz(); }
-  if(tab==='seances'){ renderAdSeances(); renderAdSeancesAlertes(); renderEgliseStats(); fillSortieEgliseSelect(); renderAdSorties(); addThemeRow('se-themes-list'); }
-  if(tab==='export'){ fillExportYears(); }
+  if(tab==='seances'){ renderAdSeances(); renderAdSeancesAlertes(); renderEgliseStats(); fillSortieEgliseSelect(); renderAdSorties(); if(!document.querySelector('#se-themes-list .theme-row')) addThemeRow('se-themes-list'); }
+  if(tab==='export'){ fillExportSelectors(); renderExportList(); }
 }
 window.onRemoteUpdate = function(){
-  const mainVisible = document.getElementById('ad-main') && !document.getElementById('ad-main').classList.contains('hidden');
-  if(mainVisible) adSwitch(currentAdminTab);
+  updateSyncBadge();
+  const main=document.getElementById('ad-main');
+  if(!main || main.classList.contains('hidden')) return;
+  // ne pas effacer une saisie en cours (formulaires, PV, fiches membres...)
+  const a=document.activeElement;
+  if(a && main.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;
+  adSwitch(currentAdminTab);
 };
 
 /* ================= MEMBRES : JOURNAL DE PRÉSENCE ================= */
@@ -96,35 +106,98 @@ function renderAdMembresBilan(){
 }
 
 /* ================= EXPOSÉS / RAPPORTS ================= */
+const OUVERT = s => s==='depose'||s==='en_correction';
+const CORRIGE = s => s==='corrige_complet'||s==='corrige_partiel'||s==='retire';
+function respNom(x){ return (x.responsable && (x.responsable.nom||x.responsable)) || commissionResponsable(x.commission) || ''; }
+function fillDocFilters(kind){
+  const st = kind==='rapport' ? ['definitif','depose','en_correction','corrige_complet','corrige_partiel','retire','clos'] : ['depose','en_correction','corrige_complet','corrige_partiel','retire'];
+  const fs=document.getElementById((kind==='expose'?'ade':'adr')+'-fs'); const vs=fs.value;
+  fs.innerHTML=`<option value="">Tous les statuts</option>`+st.map(s=>`<option value="${s}"${s===vs?' selected':''}>${statutLabel(s)[0]}</option>`).join('');
+  if(kind==='rapport'){
+    const fc=document.getElementById('adr-fc'); const vc=fc.value;
+    fc.innerHTML=`<option value="">Toutes les commissions</option>`+DB.commissions.map(c=>`<option value="${escapeHtml(c.nom)}"${c.nom===vc?' selected':''}>${escapeHtml(c.nom)}</option>`).join('');
+  } else {
+    const fl=document.getElementById('ade-fl'); const vl=fl.value;
+    const lieux=Array.from(new Set(DB.expositions.map(x=>x.lieu).filter(Boolean))).sort();
+    fl.innerHTML=`<option value="">Tous les lieux</option>`+lieux.map(l=>`<option value="${escapeHtml(l)}"${l===vl?' selected':''}>${escapeHtml(l)}</option>`).join('');
+  }
+}
 function renderAdDocs(kind){
   const data = kind==='expose' ? DB.expositions : DB.rapports;
   const pfx = kind==='expose' ? 'ade' : 'adr';
-  const depose=data.filter(x=>x.statut==='depose').length;
-  const encours=data.filter(x=>x.statut==='en_correction').length;
-  const corrige=data.filter(x=>x.statut==='corrige_complet'||x.statut==='corrige_partiel'||x.statut==='retire').length;
-  const retard=data.filter(x=>(x.statut==='depose'||x.statut==='en_correction') && joursDepuis(x.tsDepot)>=RETARD_JOURS).length;
-  document.getElementById(pfx+'-depose').textContent=depose;
-  document.getElementById(pfx+'-encours').textContent=encours;
-  document.getElementById(pfx+'-corrige').textContent=corrige;
-  document.getElementById(pfx+'-retard').textContent=retard;
+  const late = x => OUVERT(x.statut) && joursDepuis(x.tsDepot)>=RETARD_JOURS;
+  document.getElementById(pfx+'-depose').textContent=data.filter(x=>x.statut==='depose').length;
+  document.getElementById(pfx+'-encours').textContent=data.filter(x=>x.statut==='en_correction').length;
+  document.getElementById(pfx+'-corrige').textContent=data.filter(x=>CORRIGE(x.statut)).length;
+  document.getElementById(pfx+'-retard').textContent=data.filter(late).length;
+  if(kind==='rapport'){
+    document.getElementById('adr-definitif').textContent=data.filter(x=>x.statut==='definitif').length;
+    document.getElementById('adr-manquant').textContent=etudiantsSansDefinitif().length;
+  }
+  const q=normName(document.getElementById(pfx+'-q').value);
+  const fs=document.getElementById(pfx+'-fs').value;
+  let list=data.slice();
+  if(q) list=list.filter(x=>normName(x.etudiantNom).includes(q)||normName(x.numero).includes(q));
+  if(fs) list=list.filter(x=>x.statut===fs);
+  if(kind==='rapport'){ const fc=document.getElementById('adr-fc').value; if(fc) list=list.filter(x=>x.commission===fc); }
+  else { const fl=document.getElementById('ade-fl').value; if(fl) list=list.filter(x=>x.lieu===fl); }
+  list.sort((a,b)=>(b.tsDepot||0)-(a.tsDepot||0) || String(a.etudiantNom).localeCompare(b.etudiantNom,'fr'));
+  const LIMIT=200, total=list.length;
   const listId = kind==='expose' ? 'ad-e-list' : 'ad-r-list';
-  const sorted=data.slice().sort((a,b)=>b.tsDepot-a.tsDepot);
-  const statutLbl={depose:['Déposé','bn'],en_correction:['En correction','by'],corrige_complet:['Corrigé complet','bg'],corrige_partiel:['Corrigé partiel','by'],retire:['Retiré','bg'],definitif:['Définitif','bg']};
-  document.getElementById(listId).innerHTML = sorted.length ? sorted.map(x=>{
-    const [lbl,cls]=statutLbl[x.statut]||['—','bn'];
-    const late = (x.statut==='depose'||x.statut==='en_correction') && joursDepuis(x.tsDepot)>=RETARD_JOURS;
-    const respTxt = x.responsable ? ` • Resp. commission : ${escapeHtml(x.responsable.nom)} (${escapeHtml(x.responsable.tel||'')})` : '';
+  document.getElementById(listId).innerHTML = (total ? list.slice(0,LIMIT).map(x=>{
+    const [lbl,cls]=statutLabel(x.statut);
+    const r=x.responsable && typeof x.responsable==='object' ? x.responsable : null;
+    const respTxt = kind==='rapport' ? ` • Resp. commission : ${escapeHtml(respNom(x)||'—')}${r&&r.tel?' ('+escapeHtml(r.tel)+')':''}` : '';
     const mandTxt = x.mandataire ? ` • Mandataire : ${escapeHtml(x.mandataire.nom)} (${escapeHtml(x.mandataire.tel||'')})` : '';
-    return `<div class="list-item"><div class="li-top"><div class="li-name">${x.etudiantNom}</div><span class="badge ${cls}">${lbl}</span></div><div class="li-sub">${x.numero}${x.classe?' • '+x.classe:''} • ${x.phase}${x.lieu?' • '+escapeHtml(x.lieu):''}${x.commission?' • '+escapeHtml(x.commission):''}<br>Déposé le ${x.dateDepot}${x.correcteur?' • Correcteur : '+x.correcteur:''}${x.dateCorrection?' • Corrigé le '+x.dateCorrection:''}${late?' • <span style="color:var(--RED);font-weight:700;">⚠ En retard</span>':''}${respTxt}${mandTxt}</div></div>`;
-  }).join('') : `<div class="empty">Aucun document pour le moment</div>`;
+    const photos = (x.photos||[]).length ? ` • <a href="${escapeHtml(x.photos[0])}" target="_blank">📷 ${x.photos.length} photo(s)</a>` : '';
+    const acts=[];
+    if(kind==='rapport' && x.statut!=='definitif') acts.push(`<button class="btn-xs b-ok" onclick="marquerDefinitif('${x.id}')">✔ Marquer définitif</button>`);
+    if(kind==='rapport' && x.statut==='definitif') acts.push(`<button class="btn-xs b-y" onclick="annulerDefinitif('${x.id}')">Annuler « définitif »</button>`);
+    if(x.statut==='en_correction') acts.push(`<button class="btn-xs b-y" onclick="libererDoc('${kind}','${x.id}')">Libérer (remettre à corriger)</button>`);
+    acts.push(`<button class="btn-xs b-del" onclick="supprimerDoc('${kind}','${x.id}')">🗑 Supprimer</button>`);
+    return `<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(x.etudiantNom)}</div><span class="badge ${cls}">${lbl}</span></div><div class="li-sub">${escapeHtml(x.numero)}${x.classe?' • '+escapeHtml(x.classe):''} • ${escapeHtml(x.phase||'')}${x.lieu?' • '+escapeHtml(x.lieu):''}${x.commission?' • <b>'+escapeHtml(x.commission)+'</b>':''}<br>${x.source==='liste officielle'?'Enregistré depuis la liste officielle':'Déposé le '+frDate(x.dateDepot)}${x.correcteur?' • Correcteur : '+escapeHtml(x.correcteur):''}${x.dateCorrection?' • Corrigé le '+frDate(x.dateCorrection):''}${x.dateRetrait?' • Retiré le '+frDate(x.dateRetrait):''}${late(x)?' • <span style="color:var(--RED);font-weight:700;">⚠ En retard</span>':''}${respTxt}${mandTxt}${photos}</div><div class="actions">${acts.join('')}</div></div>`;
+  }).join('') : `<div class="empty">Aucun document</div>`) + (total>LIMIT?`<div class="empty">${total-LIMIT} autres résultats — affinez la recherche.</div>`:'');
   if(kind==='rapport') renderCommissionBreakdown(kind);
 }
+function marquerDefinitif(id){
+  const x=DB.rapports.find(r=>r.id===id); if(!x) return;
+  if(!confirm(`Marquer le rapport de ${x.etudiantNom} comme DÉFINITIF ?\nIl n'apparaîtra plus dans l'Espace Correcteur.`)) return;
+  const deja=rapportDefinitifDe(x.etudiantNom);
+  x.statut='definitif'; x.phase='Dépôt définitif';
+  DB.rapports.forEach(r=>{ if(r!==x && normName(r.etudiantNom)===normName(x.etudiantNom) && OUVERT(r.statut)) r.statut='clos'; });
+  if(deja && deja!==x && deja.source==='liste officielle') removeRecord('rapports', deja.id);
+  saveDB(); renderAdDocs('rapport'); toast('Rapport marqué définitif','ok');
+}
+function annulerDefinitif(id){
+  const x=DB.rapports.find(r=>r.id===id); if(!x) return;
+  if(!confirm(`Retirer le statut « définitif » du rapport de ${x.etudiantNom} ?\nIl repassera « à corriger ».`)) return;
+  x.statut='depose'; x.phase='1ère correction'; if(!x.tsDepot) x.tsDepot=nowFull();
+  saveDB(); renderAdDocs('rapport'); toast('Statut modifié','ok');
+}
+function libererDoc(kind,id){
+  const x=(kind==='expose'?DB.expositions:DB.rapports).find(r=>r.id===id); if(!x) return;
+  x.statut='depose'; x.correcteur='';
+  saveDB(); renderAdDocs(kind); toast('Document remis dans la liste « à corriger »','ok');
+}
+function supprimerDoc(kind,id){
+  const coll = kind==='expose' ? 'expositions' : 'rapports';
+  const x=DB[coll].find(r=>r.id===id); if(!x) return;
+  if(!confirm(`Supprimer définitivement ${x.numero} (${x.etudiantNom}) ?`)) return;
+  removeRecord(coll,id); saveDB(); renderAdDocs(kind); toast('Supprimé','ok');
+}
+function etudiantsSansDefinitif(){
+  const defs=new Set(DB.rapports.filter(r=>r.statut==='definitif').map(r=>normName(r.etudiantNom)));
+  return DB.etudiants.filter(e=>!defs.has(normName(e.nom)));
+}
+// Rapports : nombre de rapports DÉFINITIFS par commission comparé au total attendu
 function commissionBreakdownRows(kind){
   const data = kind==='expose' ? DB.expositions : DB.rapports;
   return DB.commissions.map(c=>{
-    const n = data.filter(x=>x.commission===c.nom).length;
-    const pct = c.totalAttendu>0 ? Math.round((n/c.totalAttendu)*100) : null;
-    return {nom:c.nom, total:c.totalAttendu, n, pct};
+    const mine=data.filter(x=>x.commission===c.nom);
+    const n = kind==='rapport' ? mine.filter(x=>x.statut==='definitif').length : mine.length;
+    const total = c.totalAttendu || DB.etudiants.filter(e=>e.commission===c.nom).length;
+    const pct = total>0 ? Math.round((n/total)*100) : null;
+    return {nom:c.nom, responsable:c.responsable||'', total, n, pct};
   });
 }
 function renderCommissionBreakdown(kind){
@@ -132,8 +205,8 @@ function renderCommissionBreakdown(kind){
   const el=document.getElementById(id);
   const rows=commissionBreakdownRows(kind);
   const faibles = rows.filter(r=>r.pct!==null && r.pct<SEUIL_COMMISSION_FAIBLE);
-  el.innerHTML = (faibles.length ? `<div class="alert-banner">${faibles.map(r=>`⚠ Taux de dépôt faible pour "${escapeHtml(r.nom)}" : ${r.n}/${r.total} (${r.pct}%) — grand écart avec le nombre attendu.`).join('<br>')}</div>` : '')
-    + (rows.length ? `<table class="rep-table"><thead><tr><th>Commission</th><th>Total attendu</th><th>Déposés</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%'+(r.pct<SEUIL_COMMISSION_FAIBLE?' ⚠':''):'—'}</td></tr>`).join('')}</tbody></table>` : `<div class="empty">Aucune commission configurée</div>`);
+  el.innerHTML = (faibles.length ? `<div class="alert-banner">${faibles.map(r=>`⚠ Taux de rapports définitifs faible pour "${escapeHtml(r.nom)}" : ${r.n}/${r.total} (${r.pct}%) — grand écart avec le nombre attendu.`).join('<br>')}</div>` : '')
+    + (rows.length ? `<table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Total attendu</th><th>Définitifs</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td style="text-align:left;">${escapeHtml(r.responsable)}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%'+(r.pct<SEUIL_COMMISSION_FAIBLE?' ⚠':''):'—'}</td></tr>`).join('')}</tbody></table>` : `<div class="empty">Aucune commission configurée</div>`);
 }
 
 /* ================= CONFIGURATION : CRÉNEAUX ================= */
@@ -165,6 +238,10 @@ function renderAdMembresManage(){
         <div class="li-name" style="font-size:13.5px;">${escapeHtml(m.nom)} <span style="font-weight:400;color:var(--MUT);font-size:11.5px;">(code ${escapeHtml(m.code)})</span></div>
         <button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeMembre(${i})">🗑</button>
       </div>
+      <div class="fg-row" style="margin-bottom:8px;">
+        <input type="text" value="${escapeHtml(m.nom)}" placeholder="Nom" onchange="updateMembreField(${i},'nom',this.value)">
+        <input type="text" inputmode="numeric" value="${escapeHtml(m.code)}" placeholder="Code personnel" onchange="updateMembreField(${i},'code',this.value)">
+      </div>
       <div class="fg-row">
         <input type="text" value="${escapeHtml(m.lieu||'')}" placeholder="Lieu d'habitation" onchange="updateMembreField(${i},'lieu',this.value)">
         <input type="tel" value="${escapeHtml(m.tel||'')}" placeholder="Numéro (WhatsApp)" onchange="updateMembreField(${i},'tel',this.value)">
@@ -179,7 +256,8 @@ function renderAdMembresManage(){
     </div>`).join('') : `<div class="empty">Aucun membre enregistré</div>`;
 }
 function updateMembreField(i, field, value){
-  DB.membres[i][field]=value; saveDB();
+  if((field==='nom'||field==='code') && !String(value).trim()){ toast('Valeur requise','ko'); renderAdMembresManage(); return; }
+  DB.membres[i][field]=String(value).trim(); saveDB();
   renderAdMembresAlertes();
 }
 function addMembre(){
@@ -195,7 +273,7 @@ function addMembre(){
 }
 function removeMembre(i){
   if(!confirm('Supprimer ce membre de la commission ?')) return;
-  DB.membres.splice(i,1); saveDB(); renderAdMembresManage();
+  removeRecord('membres', DB.membres[i].id); saveDB(); renderAdMembresManage();
   toast('Membre supprimé','ok');
 }
 
@@ -302,7 +380,7 @@ function addBiblio(){
 }
 function removeBiblio(idx){
   if(!confirm('Supprimer cette source ?')) return;
-  DB.bibliotheque.splice(idx,1); saveDB(); renderAdBiblio();
+  removeRecord('bibliotheque', DB.bibliotheque[idx].id); saveDB(); renderAdBiblio();
   toast('Supprimée','ok');
 }
 
@@ -328,7 +406,7 @@ function addMeditation(){
 }
 function removeMeditation(idx){
   if(!confirm('Supprimer cette méditation ?')) return;
-  DB.meditations.splice(idx,1); saveDB(); renderAdMeditations();
+  removeRecord('meditations', DB.meditations[idx].id); saveDB(); renderAdMeditations();
   toast('Supprimée','ok');
 }
 function renderAdQuiz(){
@@ -360,7 +438,7 @@ function addQuiz(){
 }
 function removeQuiz(idx){
   if(!confirm('Supprimer ce quiz ?')) return;
-  DB.quizBiblique.splice(idx,1); saveDB(); renderAdQuiz();
+  removeRecord('quizBiblique', DB.quizBiblique[idx].id); saveDB(); renderAdQuiz();
   toast('Supprimé','ok');
 }
 
@@ -558,21 +636,21 @@ function buildAnnualReportHTML(year){
   const totRapD=mRap.reduce((s,m)=>s+m.depose,0), totRapC=mRap.reduce((s,m)=>s+m.corrige,0);
   const totPres=mPres.reduce((s,m)=>s+m.pointages,0), totH=mPres.reduce((s,m)=>s+m.heures,0);
   const coRowsRap=commissionBreakdownRows('rapport');
-  const coTable = (rows,titre) => rows.length ? `<div class="rep-h2">${titre}</div><table class="rep-table"><thead><tr><th>Commission</th><th>Total attendu</th><th>Déposés</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%':'—'}</td></tr>`).join('')}</tbody></table>` : '';
+  const coTable = (rows,titre) => rows.length ? `<div class="rep-h2">${titre}</div><table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Total attendu</th><th>Définitifs</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td style="text-align:left;">${escapeHtml(r.responsable||'')}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%':'—'}</td></tr>`).join('')}</tbody></table>` : '';
   const membresRows = DB.membres.map(m=>{
     const mo=memberMonthStats(m.id);
     return `<tr><td style="text-align:left;">${escapeHtml(m.nom)}</td><td>${mo.nb}</td><td>${mo.heures.toFixed(1)}h</td><td>${escapeHtml(m.financier||'')}</td><td>${escapeHtml(m.spirituel||'')}</td></tr>`;
   }).join('');
   return `
     <div class="rep-title">Académie Vases d'Honneur — Commission Exposé</div>
-    <div class="rep-sub">Rapport d'évolution — Année ${year} — généré le ${todayStr()}</div>
+    <div class="rep-sub">Rapport d'évolution — Année ${year} — généré le ${frDate(todayStr())}</div>
     <div class="rep-h2">Synthèse mensuelle</div>
     <table class="rep-table"><thead><tr><th>Mois</th><th>Exposés déposés</th><th>Exposés corrigés</th><th>Rapports déposés</th><th>Rapports corrigés</th><th>Pointages membres</th><th>Heures cumulées</th></tr></thead>
     <tbody>${Array.from({length:12},(_,i)=>rows(i)).join('')}</tbody></table>
     <div class="rep-h2">Totaux annuels</div>
     <table class="rep-table"><thead><tr><th>Exposés déposés</th><th>Exposés corrigés</th><th>Rapports déposés</th><th>Rapports corrigés</th><th>Pointages</th><th>Heures cumulées</th></tr></thead>
     <tbody><tr><td>${totExpD}</td><td>${totExpC}</td><td>${totRapD}</td><td>${totRapC}</td><td>${totPres}</td><td>${totH.toFixed(1)}h</td></tr></tbody></table>
-    ${coTable(coRowsRap,'Répartition des rapports de stage par commission')}
+    ${coTable(coRowsRap,'Rapports de stage définitifs par commission')}
     <div class="rep-h2">Situation des membres (ce mois-ci)</div>
     <table class="rep-table"><thead><tr><th>Membre</th><th>Pointages</th><th>Heures</th><th>Financier</th><th>Spirituel</th></tr></thead><tbody>${membresRows}</tbody></table>`;
 }
@@ -580,7 +658,8 @@ function renderAnnualPreview(){
   const year=document.getElementById('ad-ex-year').value;
   document.getElementById('ad-ex-preview').innerHTML = buildAnnualReportHTML(year);
 }
-function exportAnnualPDF(){
+function exportAnnualPDF(){ runExport('annuel','print'); }
+function exportAnnualPDF_ancien(){
   const year=document.getElementById('ad-ex-year').value;
   const area=document.getElementById('print-area');
   area.innerHTML = buildAnnualReportHTML(year);
@@ -609,47 +688,196 @@ function exportAnnualExcel(){
 }
 
 /* ================================================================
-   RAPPORTS DE STAGE DÉFINITIFS — LISTE PAR COMMISSION (Word / Excel / PDF)
+   ÉTUDIANTS (liste officielle modifiable)
    ================================================================ */
-function frDate(ds){ const p=String(ds||'').split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : (ds||''); }
-function buildDefinitifsHTML(){
+function commissionOptions(withAll, selected){
+  return (withAll?`<option value="">Toutes les commissions</option>`:'') + DB.commissions.map(c=>`<option value="${escapeHtml(c.nom)}"${c.nom===selected?' selected':''}>${escapeHtml(c.nom)}</option>`).join('');
+}
+function renderAdEtudiants(refill){
+  document.getElementById('ads-total').textContent=DB.etudiants.length;
+  document.getElementById('ads-com').textContent=DB.commissions.length;
+  if(refill){
+    const fc=document.getElementById('ads-fc'); const v=fc.value; fc.innerHTML=commissionOptions(true,v);
+    const nc=document.getElementById('ads-new-com'); const v2=nc.value; nc.innerHTML=commissionOptions(false,v2);
+  }
+  const q=normName(document.getElementById('ads-q').value), fc=document.getElementById('ads-fc').value;
+  const defs=new Set(DB.rapports.filter(r=>r.statut==='definitif').map(r=>normName(r.etudiantNom)));
+  const groups=DB.commissions.map(c=>c.nom);
+  DB.etudiants.forEach(e=>{ if(!groups.includes(e.commission)) groups.push(e.commission); });
+  let html='';
+  groups.forEach(g=>{
+    if(fc && g!==fc) return;
+    const list=DB.etudiants.filter(e=>e.commission===g && (!q || normName(e.nom).includes(q)));
+    if(!list.length) return;
+    html+=`<div class="grp-h">${escapeHtml(String(g||'Sans commission').toUpperCase())} — Responsable : ${escapeHtml(commissionResponsable(g)||'—')} (${list.length})</div>`;
+    html+=list.map(e=>`<div class="list-item" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:180px;"><div class="li-name" style="font-size:13.5px;">${escapeHtml(e.nom)}</div><div class="li-sub">${defs.has(normName(e.nom))?'<span class="badge bg">Rapport définitif</span>':'<span class="badge br">Pas de rapport définitif</span>'}</div></div><select class="inline-in" onchange="changerCommissionEtudiant('${e.id}',this.value)">${commissionOptions(false,e.commission)}</select><button class="btn-xs b-del" onclick="supprimerEtudiant('${e.id}')">🗑</button></div>`).join('');
+  });
+  document.getElementById('ads-list').innerHTML = html || `<div class="empty">Aucun étudiant</div>`;
+}
+function addEtudiant(){
+  const nom=document.getElementById('ads-new-nom').value.trim();
+  const com=document.getElementById('ads-new-com').value;
+  if(!nom){ toast('Nom requis','ko'); return; }
+  if(!com){ toast('Commission requise','ko'); return; }
+  if(DB.etudiants.some(e=>normName(e.nom)===normName(nom))){ toast('Cet étudiant existe déjà','ko'); return; }
+  DB.etudiants.push({id:nid(), nom, commission:com, responsable:commissionResponsable(com), classe:''});
+  saveDB(); document.getElementById('ads-new-nom').value=''; renderAdEtudiants(); toast('Étudiant ajouté','ok');
+}
+function changerCommissionEtudiant(id,com){
+  const e=DB.etudiants.find(x=>x.id===id); if(!e) return;
+  e.commission=com; e.responsable=commissionResponsable(com);
+  DB.rapports.forEach(r=>{ if(normName(r.etudiantNom)===normName(e.nom)){ r.commission=com; if(r.source==='liste officielle') r.responsable={nom:e.responsable,tel:''}; } });
+  saveDB(); renderAdEtudiants(); toast('Commission modifiée','ok');
+}
+function supprimerEtudiant(id){
+  const e=DB.etudiants.find(x=>x.id===id); if(!e) return;
+  if(!confirm(`Retirer ${e.nom} de la liste des étudiants ?\n(ses dépôts éventuels sont conservés)`)) return;
+  removeRecord('etudiants',id); saveDB(); renderAdEtudiants(); toast('Étudiant retiré','ok');
+}
+function changeAdminCode(){
+  const v=document.getElementById('ad-newcode').value.trim();
+  if(v.length<4){ toast('Le code doit contenir au moins 4 caractères','ko'); return; }
+  DB.adminCode=v; saveDB(); document.getElementById('ad-newcode').value=''; toast('Code administrateur modifié','ok');
+}
+
+/* ================================================================
+   EXPORTS WORD (.docx) / EXCEL (.xlsx) / APERÇU / PDF
+   ================================================================ */
+function genLine(){ const d=new Date(); return `Académie Vases d'Honneur — Commission Exposé • Généré le ${frDate(todayStr())} à ${pad(d.getHours())}h${pad(d.getMinutes())}`; }
+const W = (label,width,align)=>({label,width,align});
+const depotTxt = r => r.source==='liste officielle' ? 'Liste officielle' : frDate(r.dateDepot);
+
+function modelDefinitifs(){
   const defs=DB.rapports.filter(r=>r.statut==='definitif');
   const coms=DB.commissions.slice();
   defs.forEach(r=>{ if(r.commission && !coms.find(c=>c.nom===r.commission)) coms.push({nom:r.commission,responsable:''}); });
-  const respDe = r => (r.responsable && r.responsable.nom) || commissionResponsable(r.commission) || '—';
-  const effectif = nom => DB.etudiants.filter(e=>e.commission===nom).length;
-  const parCom = nom => defs.filter(r=>r.commission===nom).sort((a,b)=>String(a.etudiantNom).localeCompare(b.etudiantNom,'fr'));
-  let tE=0,tD=0,tM=0;
-  const synth = coms.map(c=>{ const e=effectif(c.nom), d=parCom(c.nom).length, m=Math.max(0,e-d); tE+=e; tD+=d; tM+=m;
-    return `<tr><td style="text-align:left;">${escapeHtml(c.nom)}</td><td style="text-align:left;">${escapeHtml(c.responsable||'—')}</td><td>${e}</td><td>${d}</td><td>${m}</td></tr>`; }).join('');
-  let h = `<div class="rep-title">Rapports de stage définitifs — liste par commission</div>
-    <div class="rep-sub">Académie Vases d'Honneur — Commission Exposé — généré le ${frDate(todayStr())} — ${defs.length} rapport(s) définitif(s), ${DB.etudiants.length} étudiant(s)</div>
-    <div class="rep-h2">Synthèse par commission</div>
-    <table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Effectif</th><th>Définitifs</th><th>Manquants</th></tr></thead><tbody>${synth}<tr><td style="text-align:left;"><b>TOTAL</b></td><td></td><td><b>${tE}</b></td><td><b>${tD}</b></td><td><b>${tM}</b></td></tr></tbody></table>`;
+  const byCom = nom => defs.filter(r=>r.commission===nom).sort((a,b)=>String(a.etudiantNom).localeCompare(b.etudiantNom,'fr'));
+  const eff = nom => DB.etudiants.filter(e=>e.commission===nom).length;
+  const sans=etudiantsSansDefinitif();
+  const synth=coms.map(c=>{ const n=byCom(c.nom).length, e=eff(c.nom); return [c.nom, c.responsable||'—', e, n, Math.max(0,e-n)]; });
+  const tot=['TOTAL','', synth.reduce((s,r)=>s+r[2],0), synth.reduce((s,r)=>s+r[3],0), synth.reduce((s,r)=>s+r[4],0)];
+  const cols=[W('N°',1,'center'),W("Nom de l'étudiant",6.6),W('Commission',3.6),W('Responsable de commission',4.4),W('Date de dépôt',2.4,'center')];
+  const sections=[{heading:'Synthèse par commission',columns:[W('Commission',4.5),W('Responsable',5.5),W('Effectif',2,'center'),W('Définitifs',2.2,'center'),W('Manquants',2.2,'center')],rows:synth,total:tot}];
+  const xcols=[W('N°',6,'center'),W("Nom de l'étudiant",38),W('Commission',22),W('Responsable de commission',30),W('N° dossier',18),W('Date de dépôt',14,'center'),W('Lieu de dépôt',30)];
+  const parCom=[]; const flat=[];
   coms.forEach(c=>{
-    const list=parCom(c.nom); if(!list.length) return;
-    h += `<div class="rep-h2">${escapeHtml(String(c.nom).toUpperCase())} — Responsable : ${escapeHtml(c.responsable||'—')} (${list.length})</div>
-      <table class="rep-table"><thead><tr><th>N°</th><th>Nom de l'étudiant</th><th>Commission</th><th>Responsable de commission</th><th>Date de dépôt</th></tr></thead><tbody>${list.map((r,i)=>`<tr><td>${i+1}</td><td style="text-align:left;">${escapeHtml(r.etudiantNom)}</td><td style="text-align:left;">${escapeHtml(r.commission)}</td><td style="text-align:left;">${escapeHtml(respDe(r))}</td><td>${r.source==='liste officielle'?'Liste officielle':frDate(r.dateDepot)}</td></tr>`).join('')}</tbody></table>`;
+    const list=byCom(c.nom); if(!list.length) return;
+    const h=`${String(c.nom).toUpperCase()} — Responsable : ${c.responsable||'—'} (${list.length})`;
+    sections.push({heading:h,columns:cols,rows:list.map((r,i)=>[i+1,r.etudiantNom,r.commission,respNom(r)||'—',depotTxt(r)])});
+    parCom.push({__section:h});
+    list.forEach((r,i)=>{ const row=[i+1,r.etudiantNom,r.commission,respNom(r)||'—',r.numero,depotTxt(r),r.lieu||'']; parCom.push(row); flat.push(row); });
   });
-  const defNoms=new Set(defs.map(r=>normName(r.etudiantNom)));
-  const sans=DB.etudiants.filter(e=>!defNoms.has(normName(e.nom)));
-  if(sans.length) h += `<div class="rep-h2">Étudiants sans rapport définitif (${sans.length})</div><table class="rep-table"><thead><tr><th>N°</th><th>Nom de l'étudiant</th><th>Commission</th><th>Responsable de commission</th></tr></thead><tbody>${sans.map((e,i)=>`<tr><td>${i+1}</td><td style="text-align:left;">${escapeHtml(e.nom)}</td><td style="text-align:left;">${escapeHtml(e.commission||'')}</td><td style="text-align:left;">${escapeHtml(e.responsable||commissionResponsable(e.commission)||'—')}</td></tr>`).join('')}</tbody></table>`;
-  return h;
+  if(sans.length) sections.push({heading:`Étudiants sans rapport définitif (${sans.length})`,columns:[W('N°',1,'center'),W("Nom de l'étudiant",7),W('Commission',4),W('Responsable de commission',5)],rows:sans.map((e,i)=>[i+1,e.nom,e.commission,commissionResponsable(e.commission)||'—'])});
+  return {title:'Rapports de stage définitifs — liste par commission', subtitle:`${genLine()} • ${defs.length} rapport(s) définitif(s) pour ${DB.etudiants.length} étudiant(s)`, fileName:'Rapports_stage_definitifs_par_commission', sections,
+    sheets:[
+      {name:'Synthèse',title:'Rapports de stage définitifs — synthèse par commission',columns:[W('Commission',26),W('Responsable',32),W('Effectif',11,'center'),W('Définitifs',12,'center'),W('Manquants',12,'center')],rows:synth,total:tot},
+      {name:'Par commission',title:'Rapports de stage définitifs — par commission',columns:xcols,rows:parCom},
+      {name:'Liste complète',title:'Rapports de stage définitifs — liste complète',columns:xcols,rows:flat.map((r,i)=>[i+1].concat(r.slice(1)))},
+      {name:'Sans définitif',title:'Étudiants sans rapport de stage définitif',columns:[W('N°',6,'center'),W("Nom de l'étudiant",40),W('Commission',24),W('Responsable de commission',32)],rows:sans.map((e,i)=>[i+1,e.nom,e.commission,commissionResponsable(e.commission)||'—'])}
+    ]};
 }
-function exportDefinitifs(fmt){
-  const html=buildDefinitifsHTML();
-  if(fmt==='pdf'){
-    const area=document.getElementById('print-area');
-    area.innerHTML=html; area.style.display='block'; window.print();
-    setTimeout(()=>{ area.style.display='none'; },500);
-    return;
-  }
-  exportHtml(html, 'Rapports_stage_definitifs_par_commission_'+todayStr(), fmt);
+function modelSuivi(kind){
+  const isE=kind==='expose';
+  const data=(isE?DB.expositions:DB.rapports).slice().sort((a,b)=>(a.tsDepot||0)-(b.tsDepot||0));
+  const cols = isE
+    ? [W('N°',0.8,'center'),W('N° dossier',2.6),W('Étudiant',4),W('Classe',1.8),W('Nom de la classe',2.8),W('Phase',2.2),W('Statut',2.4),W('Lieu',3.2),W('Thèmes',3.4),W('Modérateur',2.4),W('Déposé le',2,'center'),W('Correcteur',2.6),W('Corrigé le',2,'center'),W('Retiré le',2,'center'),W('Commentaire',3.4)]
+    : [W('N°',0.8,'center'),W('N° dossier',2.6),W('Étudiant',4),W('Commission',2.6),W('Responsable',3),W('Mandataire',2.6),W('Phase',2.2),W('Statut',2.4),W('Lieu',3.2),W('Déposé le',2,'center'),W('Correcteur',2.6),W('Corrigé le',2,'center'),W('Retiré le',2,'center'),W('Commentaire',3.4)];
+  const rows=data.map((x,i)=> isE
+    ? [i+1,x.numero,x.etudiantNom,x.classe||'',x.nomClasse||'',x.phase||'',statutLabel(x.statut)[0],x.lieu||'',(x.themes||[]).join('\n'),x.moderateur||'',frDate(x.dateDepot),x.correcteur||'',frDate(x.dateCorrection),frDate(x.dateRetrait),x.commentaire||'']
+    : [i+1,x.numero,x.etudiantNom,x.commission||'',respNom(x),x.mandataire?x.mandataire.nom:'',x.phase||'',statutLabel(x.statut)[0],x.lieu||'',depotTxt(x),x.correcteur||'',frDate(x.dateCorrection),frDate(x.dateRetrait),x.commentaire||'']);
+  const st={}; data.forEach(x=>{ const l=statutLabel(x.statut)[0]; st[l]=(st[l]||0)+1; });
+  const titre = isE ? 'Suivi des exposés' : 'Suivi des rapports de stage';
+  return {title:titre, subtitle:`${genLine()} • ${rows.length} document(s)`, landscape:true, fileName:isE?'Suivi_exposes':'Suivi_rapports_de_stage',
+    sections:[{heading:'Répartition par statut',columns:[W('Statut',6),W('Nombre',3,'center')],rows:Object.entries(st),empty:'Aucun document.'},{heading:'Détail',columns:cols,rows,empty:'Aucun document enregistré.'}],
+    sheets:[{name:titre,title:titre,columns:cols.map(c=>W(c.label,Math.round(c.width*4.2),c.align)),rows},{name:'Par statut',title:titre+' — répartition par statut',columns:[W('Statut',34),W('Nombre',12,'center')],rows:Object.entries(st)}]};
+}
+function modelEtudiants(){
+  const cols=[W('N°',1,'center'),W("Nom de l'étudiant",7.4),W('Commission',4),W('Responsable de commission',5.5)];
+  const sections=[]; const parCom=[];
+  DB.commissions.forEach(c=>{
+    const list=DB.etudiants.filter(e=>e.commission===c.nom); if(!list.length) return;
+    const h=`${String(c.nom).toUpperCase()} — Responsable : ${c.responsable||'—'} (${list.length})`;
+    sections.push({heading:h,columns:cols,rows:list.map((e,i)=>[i+1,e.nom,e.commission,c.responsable||'—'])});
+    parCom.push({__section:h}); list.forEach((e,i)=>parCom.push([i+1,e.nom,e.commission,c.responsable||'—']));
+  });
+  const xc=[W('N°',6,'center'),W("Nom de l'étudiant",42),W('Commission',24),W('Responsable de commission',32)];
+  return {title:'Étudiants par commission',subtitle:`${genLine()} • ${DB.etudiants.length} étudiants répartis en ${sections.length} commissions`,fileName:'Etudiants_par_commission',sections,
+    sheets:[{name:'Par commission',title:'Étudiants par commission',columns:xc,rows:parCom},{name:'Liste',title:'Liste des étudiants',columns:xc,rows:DB.etudiants.map((e,i)=>[i+1,e.nom,e.commission,commissionResponsable(e.commission)||'—'])}]};
+}
+function modelPresences(year,month){
+  const inP = p => p.date && p.date.substring(0,4)===String(year) && (month==='' || parseInt(p.date.substring(5,7))-1===parseInt(month));
+  const list=DB.presences.filter(inP).sort((a,b)=>(a.tsArrivee||0)-(b.tsArrivee||0));
+  const rows=list.map((p,i)=>[i+1,frDate(p.date),p.jour,p.membreNom,p.creneauLabel,p.motif,p.classe||'',p.heureArrivee]);
+  const byM={}; list.forEach(p=>{ byM[p.membreNom]=(byM[p.membreNom]||0)+1; });
+  const synth=DB.membres.map(m=>[m.nom, byM[m.nom]||0, memberSundayAbsences(m.id).absences, m.financier||'', m.spirituel||'']);
+  const periode = month==='' ? 'Année '+year : MOIS_LBL[month]+' '+year;
+  const cols=[W('N°',0.8,'center'),W('Date',2,'center'),W('Jour',1.8),W('Membre',4),W('Créneau',2.8),W('Motif',4.4),W('Classe',1.8),W('Arrivée',1.6,'center')];
+  const scols=[W('Membre',6),W('Pointages',2.4,'center'),W('Absences dimanche (mois en cours)',3.6,'center'),W('Financier',2.4,'center'),W('Spirituel',2.4,'center')];
+  return {title:'Journal de présence des membres — '+periode,subtitle:`${genLine()} • ${list.length} pointage(s)`,landscape:true,fileName:'Presences_'+safeFileName(periode),
+    sections:[{heading:'Synthèse par membre',columns:scols,rows:synth,empty:'Aucun membre.'},{heading:'Détail des pointages',columns:cols,rows,empty:'Aucun pointage sur la période.'}],
+    sheets:[{name:'Pointages',title:'Journal de présence — '+periode,columns:cols.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows},{name:'Synthèse membres',title:'Synthèse par membre — '+periode,columns:scols.map(c=>W(c.label,Math.round(c.width*5),c.align)),rows:synth}]};
+}
+function modelSorties(){
+  const list=DB.sorties.slice().sort((a,b)=>String(a.date).localeCompare(b.date));
+  const nomTel = p => p ? p.nom+(p.tel?' ('+p.tel+')':'') : '';
+  const cols=[W('Date',2,'center'),W('Église / lieu',4.4),W('Statut',2),W('Président du jury',3.4),W('Jury 1',3),W('Jury 2',3),W('Observateurs',3.6),W('Coordonnateur',3),W('PV',5)];
+  const rows=list.map(v=>{ const p=v.postes||{}; return [frDate(v.date),v.eglise,v.statut==='effectuee'?'Effectuée':'Programmée',nomTel(p.president),nomTel(p.jury1),nomTel(p.jury2),[nomTel(p.observateur1),nomTel(p.observateur2)].filter(Boolean).join('\n'),nomTel(p.coordonnateur),v.pv||'']; });
+  return {title:'Sorties dans les églises filles',subtitle:`${genLine()} • ${rows.length} sortie(s)`,landscape:true,fileName:'Sorties_eglises_filles',
+    sections:[{heading:'Sorties programmées et effectuées',columns:cols,rows,empty:'Aucune sortie programmée.'}],
+    sheets:[{name:'Sorties',title:'Sorties dans les églises filles',columns:cols.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows}]};
+}
+const EXPORTS = [
+  {id:'definitifs', t:'Rapports de stage définitifs — par commission', s:'Synthèse, liste par commission avec les responsables, étudiants sans définitif', m:()=>modelDefinitifs()},
+  {id:'suivi_rapports', t:'Suivi complet des rapports de stage', s:'Tous les dépôts : statuts, responsables, mandataires, correcteurs, dates', m:()=>modelSuivi('rapport')},
+  {id:'suivi_exposes', t:'Suivi complet des exposés', s:'Tous les exposés : classes, thèmes, modérateurs, correcteurs', m:()=>modelSuivi('expose')},
+  {id:'etudiants', t:'Liste des étudiants par commission', s:'Liste officielle avec les responsables de commission', m:()=>modelEtudiants()},
+  {id:'presences', t:'Journal de présence des membres', s:'Pour l\'année et le mois choisis ci-dessus + situation des membres', m:()=>modelPresences(document.getElementById('ad-ex-year').value, document.getElementById('ad-ex-month').value)},
+  {id:'sorties', t:'Sorties dans les églises filles', s:'Postes (jury, observateurs…), statut et PV', m:()=>modelSorties()},
+  {id:'annuel', t:'Rapport d\'évolution annuel', s:'Synthèse mensuelle, commissions et situation des membres (année choisie)', html:()=>buildAnnualReportHTML(document.getElementById('ad-ex-year').value)}
+];
+function fillExportSelectors(){
+  fillExportYears();
+  const ms=document.getElementById('ad-ex-month'); const pm=ms.value;
+  ms.innerHTML=`<option value="">Toute l'année</option>`+MOIS_LBL.map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+  ms.value=pm||'';
+}
+function renderExportList(){
+  document.getElementById('ad-ex-list').innerHTML = EXPORTS.map(e=>`
+    <div class="exp-row"><div><div class="exp-t">${escapeHtml(e.t)}</div><div class="exp-s">${escapeHtml(e.s)}</div></div>
+    <div class="exp-btns"><button class="bw" onclick="runExport('${e.id}','docx')">📝 Word</button><button class="bx" onclick="runExport('${e.id}','xlsx')">📊 Excel</button><button class="bp" onclick="runExport('${e.id}','preview')">👁 Aperçu</button><button class="bp" onclick="runExport('${e.id}','print')">🖨 PDF</button></div></div>`).join('');
+}
+function printHtml(html, landscape){
+  const area=document.getElementById('print-area');
+  area.innerHTML=html;
+  let st=document.getElementById('print-orient');
+  if(!st){ st=document.createElement('style'); st.id='print-orient'; document.head.appendChild(st); }
+  st.textContent=`@page{size:A4 ${landscape?'landscape':'portrait'};margin:12mm;}`;
+  area.style.display='block'; window.print();
+  setTimeout(()=>{ area.style.display='none'; },800);
+}
+function runExport(id, fmt){
+  const e=EXPORTS.find(x=>x.id===id); if(!e) return;
+  try{
+    if(e.html){ // rapport annuel (HTML existant)
+      const html=e.html(), name='Rapport_Evolution_'+document.getElementById('ad-ex-year').value;
+      if(fmt==='docx'||fmt==='xlsx') exportHtml(html, name, fmt);
+      else if(fmt==='preview') document.getElementById('ad-ex-preview').innerHTML=html;
+      else printHtml(html, true);
+      return;
+    }
+    const m=e.m();
+    const file=(m.fileName||'Rapport')+'_'+todayStr();
+    if(fmt==='docx'){ downloadBytes(OfficeExport.buildDocx(m), file+'.docx', OfficeExport.MIME_DOCX); toast('Fichier Word téléchargé','ok'); }
+    else if(fmt==='xlsx'){ downloadBytes(OfficeExport.buildXlsx(m), file+'.xlsx', OfficeExport.MIME_XLSX); toast('Fichier Excel téléchargé','ok'); }
+    else if(fmt==='preview'){ document.getElementById('ad-ex-preview').innerHTML=OfficeExport.buildHtml(m); document.getElementById('ad-ex-preview').scrollIntoView({behavior:'smooth'}); }
+    else printHtml(OfficeExport.buildHtml(m), m.landscape);
+  }catch(err){ console.error(err); toast("Erreur lors de l'export",'ko'); }
 }
 
 /* Convertit un rapport HTML (titres .rep-title/.rep-sub/.rep-h2 + tableaux .rep-table)
    en vrai fichier Word (.docx) ou Excel (.xlsx), sans connexion Internet. */
 function exportHtml(html, fileName, fmt){
+  fileName = fileName + '_' + todayStr();
   const div=document.createElement('div'); div.innerHTML=html;
   const model={title:'', subtitle:'', sections:[], sheets:[]};
   let heading='';
@@ -680,10 +908,7 @@ function exportHtml(html, fileName, fmt){
   });
   try{
     const bytes = fmt==='xlsx' ? OfficeExport.buildXlsx(model) : OfficeExport.buildDocx(model);
-    const blob=new Blob([bytes],{type: fmt==='xlsx'?OfficeExport.MIME_XLSX:OfficeExport.MIME_DOCX});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=fileName+'.'+fmt; document.body.appendChild(a); a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },4000);
+    downloadBytes(bytes, fileName+'.'+fmt, fmt==='xlsx'?OfficeExport.MIME_XLSX:OfficeExport.MIME_DOCX);
     toast(fmt==='xlsx'?'Fichier Excel téléchargé':'Fichier Word téléchargé','ok');
   }catch(e){ console.error(e); toast("Erreur lors de l'export",'ko'); }
 }
@@ -699,3 +924,10 @@ function addThemeRow(containerId, value){
 function getThemes(containerId){
   return Array.from(document.querySelectorAll('#'+containerId+' input')).map(i=>i.value.trim()).filter(Boolean);
 }
+
+/* ================= INIT ================= */
+(function(){
+  let ok=false; try{ ok=sessionStorage.getItem('CE_ADMIN')==='1'; }catch(e){}
+  if(ok) showAdmin();
+  updateSyncBadge();
+})();

@@ -183,3 +183,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   #print-area, #print-area *{visibility:visible;}
   #print-area{display:block !important;position:absolute;left:0;top:0;width:100%;padding:20px;}
 }
+
+/* correctif : la zone "ajouter une photo" est un <label> placé dans .fg */
+.fg label.photo-add{display:flex;align-items:center;justify-content:center;font-size:22px;margin:0;text-transform:none;letter-spacing:0;}
+/* voyant de connexion au serveur */
+.sync-badge{color:rgba(255,255,255,.7);font-size:11px;font-weight:700;}
