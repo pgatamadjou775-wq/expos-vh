@@ -19,7 +19,8 @@ const STATUT_INFO = {
   en_correction:{lbl:'En cours de correction', cls:'by'},
   corrige_complet:{lbl:'Corrigé — complet, à récupérer', cls:'bg'},
   corrige_partiel:{lbl:'Corrigé — partiel, à récupérer', cls:'by'},
-  retire:       {lbl:'Retiré', cls:'bg'}
+  retire:       {lbl:'Retiré', cls:'bg'},
+  definitif:    {lbl:'Rapport définitif — enregistré', cls:'bg'}
 };
 function openSuivi(){
   goScreen('s-suivi');

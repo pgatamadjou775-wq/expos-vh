@@ -13,19 +13,19 @@
 <!-- ================= ACCUEIL ================= -->
 <div class="screen on" id="s-home">
   <div style="width:100%;">
+    <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
     <div class="hero">
       <div class="hero-badge">Académie Vases d'Honneur</div>
       <div class="hero-title">BIENVENUE À LA<br><b>COMMISSION EXPOSÉ</b></div>
       <div class="hero-clock" id="home-date">—</div>
       <div class="hero-clock"><b id="home-time">--:--:--</b></div>
       <button class="btn-sm" style="margin-top:14px;background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">🔄 Actualiser</button>
-      <div class="sync-badge" style="margin-top:8px;font-size:11px;font-weight:700;">●</div>
     </div>
     <div class="tiles">
       <button class="tile tile-1" onclick="openPresence()">
         <div class="tile-ico">🕒</div>
-        <div class="tile-t">Pointer ma présence</div>
-        <div class="tile-s">Membres de la commission — arrivée / départ</div>
+        <div class="tile-t">Pointer mon arrivée</div>
+        <div class="tile-s">Membres de la commission</div>
       </button>
       <button class="tile tile-2" onclick="openExpose()">
         <div class="tile-ico">📚</div>
@@ -46,25 +46,18 @@
   </div>
 </div>
 
-<!-- ================= PRESENCE ================= -->
+<!-- ================= PRESENCE (arrivée uniquement) ================= -->
 <div class="screen" id="s-presence">
   <div class="scr-head">
     <div class="scr-head-top">
       <button class="back-ico" onclick="goHome()">←</button>
-      <div class="scr-title">Pointage de présence</div>
+      <div class="scr-title">Pointer mon arrivée</div>
     </div>
     <div class="scr-sub">Commission Exposé</div>
   </div>
   <div class="scr-body">
 
-    <div id="pr-choice">
-      <div class="card"><div class="card-b" style="display:flex;flex-direction:column;gap:10px;">
-        <button class="btn btn-g" onclick="prGoSearch('arrivee')">👆 Marquer mon arrivée</button>
-        <button class="btn btn-ghost" onclick="prGoSearch('depart')">🚪 Marquer mon départ</button>
-      </div></div>
-    </div>
-
-    <div id="pr-search" class="hidden">
+    <div id="pr-search">
       <div class="srch-box"><span class="srch-ico">🔍</span><input type="text" id="pr-s" placeholder="Rechercher votre nom..." oninput="prFilter()"></div>
       <div class="pick-list" id="pr-list"></div>
     </div>
@@ -96,6 +89,7 @@
           </div>
           <div id="pr-salle-wrap" class="hidden">
             <div class="note-box complet" id="pr-salle-info" style="margin-bottom:12px;"></div>
+            <div class="fg"><label>Compte-rendu de la présentation</label><textarea id="pr-compte-rendu" rows="2" placeholder="Résumé de la présentation effectuée..."></textarea></div>
             <label class="chk-row" id="pr-valid-row">
               <input type="checkbox" id="pr-valid-meth">
               <span class="chk-txt">Je valide : la présentation de la méthodologie a été effectuée dans cette salle.</span>
@@ -136,26 +130,22 @@
     <!-- DEPOSER -->
     <div id="ex-deposer">
       <div class="card"><div class="card-b">
-        <div class="fg"><label>Nom de l'étudiant(e)</label><input type="text" id="ex-nom" placeholder="Tapez pour rechercher dans la liste..." autocomplete="off" oninput="nomSearch('ex')">
-          <div class="pick-list hidden" id="ex-nom-list" style="margin-top:6px;max-height:30vh;"></div>
-          <div class="hint" id="ex-nom-info"></div></div>
+        <div class="fg"><label>Nom de l'étudiant(e)</label><input type="text" id="ex-nom" placeholder="Nom complet"></div>
+        <div class="fg"><label>Numéro de téléphone (facultatif — installez l'appli "Suivi" pour recevoir vos statuts)</label><input type="tel" id="ex-tel" placeholder="Ex: 07 00 00 00 00"></div>
         <div class="fg-row">
           <div class="fg"><label>Classe</label>
             <select id="ex-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
           </div>
           <div class="fg"><label>Phase</label>
-            <select id="ex-phase"><option value="1ère correction">1ère correction</option><option value="Dépôt définitif">Dépôt définitif</option></select>
+            <select id="ex-phase"><option value="1ère correction">1ère correction</option><option value="Deuxième correction">Deuxième correction</option><option value="Dépôt définitif">Dépôt définitif</option></select>
           </div>
         </div>
-        <div class="fg"><label>Commission</label><select id="ex-commission" onchange="majResponsable('ex')"></select><div class="hint" id="ex-responsable-info"></div></div>
+        <div class="fg"><label>Nom de la classe</label><input type="text" id="ex-nom-classe" placeholder="Ex: Classe 2 - Promotion Janvier 2026"></div>
         <div class="fg"><label>Nom du modérateur de la classe</label><input type="text" id="ex-moderateur" placeholder="Nom du modérateur"></div>
         <div class="fg"><label>Lieu de dépôt</label>
-          <div class="chips" id="ex-lieu-chips">
-            <div class="chip sel" data-v="Centre Kodesh" onclick="pickLieu(this,'ex')"><span class="dot"></span>Centre Kodesh</div>
-            <div class="chip" data-v="Église fille" onclick="pickLieu(this,'ex')"><span class="dot"></span>Église fille</div>
-          </div>
-          <div id="ex-eglise-wrap" class="hidden" style="margin-top:8px;">
-            <select id="ex-eglise"></select>
+          <select id="ex-lieu" onchange="toggleLieuAutre('ex')"></select>
+          <div id="ex-lieu-autre-wrap" class="hidden" style="margin-top:8px;">
+            <input type="text" id="ex-lieu-autre" placeholder="Précisez le nom de votre église / centre...">
           </div>
         </div>
         <div class="fg"><label>Thèmes déposés (facultatif)</label><div id="ex-themes-list"></div>
@@ -192,7 +182,7 @@
   </div>
 </div>
 
-<!-- ================= RAPPORT DE STAGE ================= -->
+<!-- ================= RAPPORT DE STAGE (pas de classe) ================= -->
 <div class="screen" id="s-rapport">
   <div class="scr-head">
     <div class="scr-head-top">
@@ -209,27 +199,32 @@
 
     <div id="rp-deposer">
       <div class="card"><div class="card-b">
-        <div class="fg"><label>Nom de l'étudiant(e)</label><input type="text" id="rp-nom" placeholder="Tapez pour rechercher dans la liste..." autocomplete="off" oninput="nomSearch('rp')">
+        <div class="fg"><label>Nom de l'étudiant(e)</label><input type="text" id="rp-nom" placeholder="Tapez votre nom puis choisissez-le dans la liste" autocomplete="off" oninput="rpNomSearch()">
           <div class="pick-list hidden" id="rp-nom-list" style="margin-top:6px;max-height:30vh;"></div>
           <div class="hint" id="rp-nom-info"></div></div>
-        <div class="fg-row">
-          <div class="fg"><label>Classe</label>
-            <select id="rp-classe"><option value="">— Non précisée —</option><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
-          </div>
-          <div class="fg"><label>Phase</label>
-            <select id="rp-phase" onchange="rpPhaseInfo()"><option value="1ère correction">1ère correction</option><option value="Dépôt définitif">Dépôt définitif</option></select>
-          </div>
+        <div class="fg"><label>Numéro de téléphone (facultatif — installez l'appli "Suivi" pour recevoir vos statuts)</label><input type="tel" id="rp-tel" placeholder="Ex: 07 00 00 00 00"></div>
+        <div class="fg"><label>Phase</label>
+          <select id="rp-phase" onchange="rpPhaseInfo()"><option value="1ère correction">1ère correction</option><option value="Deuxième correction">Deuxième correction</option><option value="Dépôt définitif">Dépôt définitif</option></select>
         </div>
-        <div class="note-box partiel hidden" id="rp-phase-info" style="margin-top:0;"><div class="note-txt">📌 Rapport <b>définitif</b> : il est enregistré directement comme définitif et <b>ne passe pas en correction</b>.</div></div>
-        <div class="fg"><label>Commission</label><select id="rp-commission" onchange="majResponsable('rp')"></select></div>
-        <div class="fg"><label>Responsable de commission</label><input type="text" id="rp-responsable" placeholder="Rempli automatiquement selon la commission" readonly style="background:var(--GRNP);font-weight:600;"></div>
-        <div class="fg"><label>Lieu de dépôt</label>
-          <div class="chips" id="rp-lieu-chips">
-            <div class="chip sel" data-v="Centre Kodesh" onclick="pickLieu(this,'rp')"><span class="dot"></span>Centre Kodesh</div>
-            <div class="chip" data-v="Église fille" onclick="pickLieu(this,'rp')"><span class="dot"></span>Église fille</div>
+        <div class="note-box partiel hidden" id="rp-phase-info" style="margin-top:0;"><div class="note-txt">📌 Rapport <b>définitif</b> : il est enregistré comme définitif et <b>ne passe pas en correction</b>.</div></div>
+        <div class="fg"><label>Commission</label><select id="rp-commission" onchange="rpCommissionChange()"></select></div>
+        <div class="card" style="box-shadow:none;border:1.5px dashed var(--LINE);margin-bottom:13px;"><div class="card-b">
+          <div class="hint" style="margin-bottom:8px;font-weight:700;color:var(--GRN);">Responsable de la commission (obligatoire)</div>
+          <div class="fg-row">
+            <div class="fg"><label>Nom</label><input type="text" id="rp-resp-nom" placeholder="Nom du responsable"></div>
+            <div class="fg"><label>Numéro</label><input type="tel" id="rp-resp-tel" placeholder="Téléphone"></div>
           </div>
-          <div id="rp-eglise-wrap" class="hidden" style="margin-top:8px;">
-            <select id="rp-eglise"></select>
+          <div class="hint" id="rp-resp-hint" style="margin-top:-6px;">Le responsable est rempli automatiquement selon la commission.</div>
+          <div class="hint" style="margin:10px 0 8px;font-weight:700;color:var(--GRN);">Mandaté pour le dépôt (facultatif)</div>
+          <div class="fg-row">
+            <div class="fg"><label>Nom</label><input type="text" id="rp-mand-nom" placeholder="Nom (si différent)"></div>
+            <div class="fg"><label>Numéro</label><input type="tel" id="rp-mand-tel" placeholder="Téléphone"></div>
+          </div>
+        </div></div>
+        <div class="fg"><label>Lieu de dépôt</label>
+          <select id="rp-lieu" onchange="toggleLieuAutre('rp')"></select>
+          <div id="rp-lieu-autre-wrap" class="hidden" style="margin-top:8px;">
+            <input type="text" id="rp-lieu-autre" placeholder="Précisez le nom de votre église / centre...">
           </div>
         </div>
         <div class="fg"><label>Photos des pages de couverture (obligatoire)</label>
@@ -303,7 +298,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="data-etudiants.js"></script>
 <script src="core.js"></script>
 <script src="etudiant.js"></script>
 </body>
