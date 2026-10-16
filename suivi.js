@@ -53,7 +53,7 @@ function renderSuivi(){
       <div class="li-sub">${x.source==='liste officielle'?'Enregistré depuis la liste officielle':'Déposé le '+frDate(x.dateDepot)+(x.heureDepot?' à '+x.heureDepot:'')}${x.commission?' • '+escapeHtml(x.commission):''}${x.dateCorrection?' • Corrigé le '+frDate(x.dateCorrection):''}${x.dateRetrait?' • Retiré le '+frDate(x.dateRetrait):''}</div>
       ${x.commentaire ? `<div class="note-box ${x.statut==='corrige_complet'||x.statut==='retire'?'complet':'partiel'}" style="margin-top:8px;"><div class="note-lbl">Remarques du correcteur</div><div class="note-txt">${escapeHtml(x.commentaire)}</div></div>` : ''}
     </div>`;
-  }).join('') : `<div class="empty"><div class="eico">📭</div><p>Aucun exposé ou rapport trouvé pour ce nom</p></div>`;
+  }).join('') : `<div class="empty"><p>Aucun exposé ou rapport trouvé pour ce nom</p></div>`;
 
   const mine = DB.messages.filter(m=>matchName(m.nom)).sort((a,b)=>(b.date+b.heure).localeCompare(a.date+a.heure));
   msgEl.innerHTML = mine.length ? mine.map(m=>{
@@ -62,9 +62,9 @@ function renderSuivi(){
       <div class="li-top" style="cursor:pointer;" onclick="markMessageRead('${m.id}')"><div class="li-name">${escapeHtml(m.nom)}</div>${m.lu?'':'<span class="badge by">Nouveau</span>'}</div>
       <div class="li-sub">${escapeHtml(m.texte)}</div>
       <div class="hint" style="margin-top:4px;">${m.date} à ${m.heure}</div>
-      ${link ? `<a href="${link}" target="_blank" class="btn-sm btn-g" style="margin-top:8px;display:inline-block;text-decoration:none;">📲 Envoyer via WhatsApp</a>` : ''}
+      ${link ? `<a href="${link}" target="_blank" class="btn-sm btn-g" style="margin-top:8px;display:inline-block;text-decoration:none;">Envoyer via WhatsApp</a>` : ''}
     </div>`;
-  }).join('') : `<div class="empty"><div class="eico">🔔</div><p>Aucune notification pour ce nom</p></div>`;
+  }).join('') : `<div class="empty"><p>Aucune notification pour ce nom</p></div>`;
 }
 function markMessageRead(id){
   const m=DB.messages.find(x=>x.id===id); if(!m || m.lu) return;
@@ -82,7 +82,7 @@ function biblioSwitch(classe){
   document.getElementById('bib-list').innerHTML = list.length ? list.map(b=>`
     <div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(b.titre)}</div><span class="badge bn">${escapeHtml(b.type||'Livre')}</span></div>
     <div class="li-sub">${b.auteur?'Auteur : '+escapeHtml(b.auteur):''}${b.lien?'<br>'+escapeHtml(b.lien):''}</div></div>`).join('')
-    : `<div class="empty"><div class="eico">📖</div><p>Aucune source enregistrée pour cette classe pour le moment</p></div>`;
+    : `<div class="empty"><p>Aucune source enregistrée pour cette classe pour le moment</p></div>`;
 }
 
 /* ================= INIT ================= */

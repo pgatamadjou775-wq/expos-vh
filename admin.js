@@ -13,13 +13,14 @@ function showAdmin(){
   document.getElementById('ad-main').classList.remove('hidden');
   adSwitch(currentAdminTab);
 }
-let currentAdminTab='membres';
+let currentAdminTab='dashboard';
 function adSwitch(tab){
   currentAdminTab=tab;
-  ['membres','expose','rapport','etudiants','config','seances','export'].forEach(t=>{
+  ['dashboard','membres','expose','rapport','etudiants','config','seances','export'].forEach(t=>{
     document.getElementById('ad-tab-'+t).classList.toggle('on', t===tab);
     document.getElementById('ad-'+t).classList.toggle('hidden', t!==tab);
   });
+  if(tab==='dashboard') renderDashboard();
   if(tab==='membres'){ renderAdMembres(); renderAdMembresAlertes(); renderAdMembresBilan(); }
   if(tab==='expose'){ fillDocFilters('expose'); renderAdDocs('expose'); }
   if(tab==='rapport'){ fillDocFilters('rapport'); renderAdDocs('rapport'); }
@@ -72,9 +73,9 @@ function renderAdMembresAlertes(){
   const alertes=[];
   DB.membres.forEach(m=>{
     const {absences}=memberSundayAbsences(m.id);
-    if(absences>=SEUIL_ABSENCES_DIMANCHE) alertes.push(`⚠ ${escapeHtml(m.nom)} n'a pointé aucune présence lors de ${absences} dimanche(s) ce mois-ci.`);
-    if(niveauAlerte(m.financier)) alertes.push(`⚠ Situation financière ${m.financier.toLowerCase()} signalée pour ${escapeHtml(m.nom)}.`);
-    if(niveauAlerte(m.spirituel)) alertes.push(`⚠ Situation spirituelle ${m.spirituel.toLowerCase()} signalée pour ${escapeHtml(m.nom)}.`);
+    if(absences>=SEUIL_ABSENCES_DIMANCHE) alertes.push(`${escapeHtml(m.nom)} n'a pointé aucune présence lors de ${absences} dimanche(s) ce mois-ci.`);
+    if(niveauAlerte(m.financier)) alertes.push(`Situation financière ${m.financier.toLowerCase()} signalée pour ${escapeHtml(m.nom)}.`);
+    if(niveauAlerte(m.spirituel)) alertes.push(`Situation spirituelle ${m.spirituel.toLowerCase()} signalée pour ${escapeHtml(m.nom)}.`);
   });
   el.innerHTML = alertes.length ? `<div class="alert-banner">${alertes.join('<br>')}</div>` : '';
 }
@@ -95,10 +96,10 @@ function renderAdMembresBilan(){
   el.innerHTML = DB.membres.length ? `<table class="rep-table"><thead><tr><th>Membre</th><th>Semaine (nb/h)</th><th>Mois (nb/h)</th><th>Absences dimanche</th><th>Financier</th><th>Spirituel</th></tr></thead><tbody>${DB.membres.map(m=>{
     const w=memberPeriodStats(m.id,7), mo=memberMonthStats(m.id), sa=memberSundayAbsences(m.id);
     return `<tr>
-      <td style="text-align:left;">${escapeHtml(m.nom)}${m.lieu?'<br><span style=\"font-size:10px;color:var(--MUT);\">'+escapeHtml(m.lieu)+'</span>':''}</td>
+      <td style="text-align:left;">${escapeHtml(m.nom)}${m.eglise?'<br><span style=\"font-size:10px;color:var(--MUT);\">'+escapeHtml(m.eglise)+'</span>':''}${m.motifAbsence?'<br><span style=\"font-size:10px;color:var(--RED);\">'+escapeHtml(m.motifAbsence)+'</span>':''}${m.lieu?'<br><span style=\"font-size:10px;color:var(--MUT);\">'+escapeHtml(m.lieu)+'</span>':''}</td>
       <td>${w.nb} / ${w.heures.toFixed(1)}h</td>
       <td>${mo.nb} / ${mo.heures.toFixed(1)}h</td>
-      <td>${sa.absences>=SEUIL_ABSENCES_DIMANCHE?'<span style="color:var(--RED);font-weight:700;">':''}${sa.absences}/${sa.total}${sa.absences>=SEUIL_ABSENCES_DIMANCHE?' ⚠</span>':''}</td>
+      <td>${sa.absences>=SEUIL_ABSENCES_DIMANCHE?'<span style="color:var(--RED);font-weight:700;">':''}${sa.absences}/${sa.total}${sa.absences>=SEUIL_ABSENCES_DIMANCHE?' </span>':''}</td>
       <td><span class="badge ${niveauBadgeClass(m.financier)}">${escapeHtml(m.financier||'Moyen')}</span></td>
       <td><span class="badge ${niveauBadgeClass(m.spirituel)}">${escapeHtml(m.spirituel||'Moyen')}</span></td>
     </tr>`;
@@ -149,13 +150,13 @@ function renderAdDocs(kind){
     const r=x.responsable && typeof x.responsable==='object' ? x.responsable : null;
     const respTxt = kind==='rapport' ? ` • Resp. commission : ${escapeHtml(respNom(x)||'—')}${r&&r.tel?' ('+escapeHtml(r.tel)+')':''}` : '';
     const mandTxt = x.mandataire ? ` • Mandataire : ${escapeHtml(x.mandataire.nom)} (${escapeHtml(x.mandataire.tel||'')})` : '';
-    const photos = (x.photos||[]).length ? ` • <a href="${escapeHtml(x.photos[0])}" target="_blank">📷 ${x.photos.length} photo(s)</a>` : '';
+    const photos = (x.photos||[]).length ? ` • <a href="${escapeHtml(x.photos[0])}" target="_blank">${x.photos.length} photo(s)</a>` : '';
     const acts=[];
-    if(kind==='rapport' && x.statut!=='definitif') acts.push(`<button class="btn-xs b-ok" onclick="marquerDefinitif('${x.id}')">✔ Marquer définitif</button>`);
+    if(kind==='rapport' && x.statut!=='definitif') acts.push(`<button class="btn-xs b-ok" onclick="marquerDefinitif('${x.id}')">Marquer définitif</button>`);
     if(kind==='rapport' && x.statut==='definitif') acts.push(`<button class="btn-xs b-y" onclick="annulerDefinitif('${x.id}')">Annuler « définitif »</button>`);
     if(x.statut==='en_correction') acts.push(`<button class="btn-xs b-y" onclick="libererDoc('${kind}','${x.id}')">Libérer (remettre à corriger)</button>`);
-    acts.push(`<button class="btn-xs b-del" onclick="supprimerDoc('${kind}','${x.id}')">🗑 Supprimer</button>`);
-    return `<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(x.etudiantNom)}</div><span class="badge ${cls}">${lbl}</span></div><div class="li-sub">${escapeHtml(x.numero)}${x.classe?' • '+escapeHtml(x.classe):''} • ${escapeHtml(x.phase||'')}${x.lieu?' • '+escapeHtml(x.lieu):''}${x.commission?' • <b>'+escapeHtml(x.commission)+'</b>':''}<br>${x.source==='liste officielle'?'Enregistré depuis la liste officielle':'Déposé le '+frDate(x.dateDepot)}${x.correcteur?' • Correcteur : '+escapeHtml(x.correcteur):''}${x.dateCorrection?' • Corrigé le '+frDate(x.dateCorrection):''}${x.dateRetrait?' • Retiré le '+frDate(x.dateRetrait):''}${late(x)?' • <span style="color:var(--RED);font-weight:700;">⚠ En retard</span>':''}${respTxt}${mandTxt}${photos}</div><div class="actions">${acts.join('')}</div></div>`;
+    acts.push(`<button class="btn-xs b-del" onclick="supprimerDoc('${kind}','${x.id}')">Supprimer</button>`);
+    return `<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(x.etudiantNom)}</div><span class="badge ${cls}">${lbl}</span></div><div class="li-sub">${escapeHtml(x.numero)}${x.classe?' • '+escapeHtml(x.classe):''} • ${escapeHtml(x.phase||'')}${x.lieu?' • '+escapeHtml(x.lieu):''}${x.commission?' • <b>'+escapeHtml(x.commission)+'</b>':''}<br>${x.source==='liste officielle'?'Enregistré depuis la liste officielle':'Déposé le '+frDate(x.dateDepot)}${x.correcteur?' • Correcteur : '+escapeHtml(x.correcteur):''}${x.dateCorrection?' • Corrigé le '+frDate(x.dateCorrection):''}${x.dateRetrait?' • Retiré le '+frDate(x.dateRetrait):''}${late(x)?' • <span style="color:var(--RED);font-weight:700;">En retard</span>':''}${respTxt}${mandTxt}${photos}</div><div class="actions">${acts.join('')}</div></div>`;
   }).join('') : `<div class="empty">Aucun document</div>`) + (total>LIMIT?`<div class="empty">${total-LIMIT} autres résultats — affinez la recherche.</div>`:'');
   if(kind==='rapport') renderCommissionBreakdown(kind);
 }
@@ -205,8 +206,8 @@ function renderCommissionBreakdown(kind){
   const el=document.getElementById(id);
   const rows=commissionBreakdownRows(kind);
   const faibles = rows.filter(r=>r.pct!==null && r.pct<SEUIL_COMMISSION_FAIBLE);
-  el.innerHTML = (faibles.length ? `<div class="alert-banner">${faibles.map(r=>`⚠ Taux de rapports définitifs faible pour "${escapeHtml(r.nom)}" : ${r.n}/${r.total} (${r.pct}%) — grand écart avec le nombre attendu.`).join('<br>')}</div>` : '')
-    + (rows.length ? `<table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Total attendu</th><th>Définitifs</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td style="text-align:left;">${escapeHtml(r.responsable)}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%'+(r.pct<SEUIL_COMMISSION_FAIBLE?' ⚠':''):'—'}</td></tr>`).join('')}</tbody></table>` : `<div class="empty">Aucune commission configurée</div>`);
+  el.innerHTML = (faibles.length ? `<div class="alert-banner">${faibles.map(r=>`Taux de rapports définitifs faible pour "${escapeHtml(r.nom)}" : ${r.n}/${r.total} (${r.pct}%) — grand écart avec le nombre attendu.`).join('<br>')}</div>` : '')
+    + (rows.length ? `<table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Total attendu</th><th>Définitifs</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td style="text-align:left;">${escapeHtml(r.responsable)}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%'+(r.pct<SEUIL_COMMISSION_FAIBLE?' ':''):'—'}</td></tr>`).join('')}</tbody></table>` : `<div class="empty">Aucune commission configurée</div>`);
 }
 
 /* ================= CONFIGURATION : CRÉNEAUX ================= */
@@ -235,8 +236,8 @@ function renderAdMembresManage(){
   el.innerHTML = DB.membres.length ? DB.membres.map((m,i)=>`
     <div class="list-item" style="padding:12px 0;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
-        <div class="li-name" style="font-size:13.5px;">${escapeHtml(m.nom)} <span style="font-weight:400;color:var(--MUT);font-size:11.5px;">(code ${escapeHtml(m.code)})</span></div>
-        <button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeMembre(${i})">🗑</button>
+        <div class="li-name" style="font-size:13.5px;">${escapeHtml(m.nom)} <span style="font-weight:400;color:var(--MUT);font-size:11.5px;">${escapeHtml(m.role||'Membre')} — code ${escapeHtml(m.code)}</span></div>
+        <button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeMembre(${i})">Supprimer</button>
       </div>
       <div class="fg-row" style="margin-bottom:8px;">
         <input type="text" value="${escapeHtml(m.nom)}" placeholder="Nom" onchange="updateMembreField(${i},'nom',this.value)">
@@ -247,7 +248,8 @@ function renderAdMembresManage(){
         <input type="tel" value="${escapeHtml(m.tel||'')}" placeholder="Numéro (WhatsApp)" onchange="updateMembreField(${i},'tel',this.value)">
       </div>
       <div class="fg-row" style="margin-top:8px;">
-        <input type="text" value="${escapeHtml(m.motifAbsence||'')}" placeholder="Motif d'absence (si besoin)" onchange="updateMembreField(${i},'motifAbsence',this.value)">
+        <input type="text" value="${escapeHtml(m.motifAbsence||'')}" placeholder="Situation / motif d'absence" onchange="updateMembreField(${i},'motifAbsence',this.value)">
+        <input type="text" value="${escapeHtml(m.eglise||'')}" placeholder="Église / groupe" onchange="updateMembreField(${i},'eglise',this.value)">
       </div>
       <div class="fg-row" style="margin-top:8px;">
         <select onchange="updateMembreField(${i},'financier',this.value)">${NIVEAU_OPTIONS.map(n=>`<option value="${n}" ${m.financier===n?'selected':''}>Financier : ${n}</option>`).join('')}</select>
@@ -280,7 +282,7 @@ function removeMembre(i){
 /* ================= CONFIGURATION : MOTIFS DE PRÉSENCE ================= */
 function renderAdMotifs(){
   const el=document.getElementById('ad-mo-list');
-  el.innerHTML = DB.motifsPresence.length ? DB.motifsPresence.map((m,i)=>`<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;"><div class="li-name" style="font-size:13.5px;">${escapeHtml(m)}</div>${DB.motifsPresence.length>1?`<button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeMotif(${i})">🗑</button>`:''}</div>`).join('') : `<div class="empty">Aucun motif configuré</div>`;
+  el.innerHTML = DB.motifsPresence.length ? DB.motifsPresence.map((m,i)=>`<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;"><div class="li-name" style="font-size:13.5px;">${escapeHtml(m)}</div>${DB.motifsPresence.length>1?`<button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeMotif(${i})">Supprimer</button>`:''}</div>`).join('') : `<div class="empty">Aucun motif configuré</div>`;
 }
 function addMotif(){
   const inp=document.getElementById('ad-mo-new');
@@ -298,7 +300,7 @@ function removeMotif(i){
 /* ================= CONFIGURATION : ÉGLISES / LIEUX ================= */
 function renderAdEglises(){
   const el=document.getElementById('ad-eg-list');
-  el.innerHTML = DB.eglises.length ? DB.eglises.map((n,i)=>`<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;"><div class="li-name" style="font-size:13.5px;">${escapeHtml(n)}</div><button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeEglise(${i})">🗑</button></div>`).join('') : `<div class="empty">Aucun lieu configuré</div>`;
+  el.innerHTML = DB.eglises.length ? DB.eglises.map((n,i)=>`<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;"><div class="li-name" style="font-size:13.5px;">${escapeHtml(n)}</div><button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeEglise(${i})">Supprimer</button></div>`).join('') : `<div class="empty">Aucun lieu configuré</div>`;
 }
 function addEglise(){
   const inp=document.getElementById('ad-eg-new');
@@ -323,7 +325,7 @@ function renderAdCommissions(){
         <div class="li-sub" style="margin-bottom:4px;">Responsable : <input type="text" value="${escapeHtml(c.responsable||'')}" placeholder="Nom du responsable (ou « Église fille »)" style="width:240px;padding:4px 6px;border:1px solid var(--LINE);border-radius:6px;" onchange="updateCommissionResponsable(${i}, this.value)"></div>
         <div class="li-sub">Total attendu : <input type="number" min="0" value="${c.totalAttendu||0}" style="width:70px;padding:4px 6px;border:1px solid var(--LINE);border-radius:6px;" onchange="updateCommissionTotal(${i}, this.value)"></div>
       </div>
-      <button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeCommission(${i})">🗑</button>
+      <button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeCommission(${i})">Supprimer</button>
     </div>`).join('') : `<div class="empty">Aucune commission configurée</div>`;
 }
 function addCommission(){
@@ -362,7 +364,7 @@ function renderAdBiblio(){
     if(!items.length) return '';
     return `<div style="margin-bottom:8px;"><div class="hint" style="font-weight:700;color:var(--GRN);">${cl}</div>${items.map(b=>{
       const idx=list.indexOf(b);
-      return `<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;"><div><div class="li-name" style="font-size:13px;">${escapeHtml(b.titre)} <span class="badge bn">${escapeHtml(b.type)}</span></div><div class="li-sub">${b.auteur?escapeHtml(b.auteur):''}${b.lien?' • '+escapeHtml(b.lien):''}</div></div><button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeBiblio(${idx})">🗑</button></div>`;
+      return `<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;"><div><div class="li-name" style="font-size:13px;">${escapeHtml(b.titre)} <span class="badge bn">${escapeHtml(b.type)}</span></div><div class="li-sub">${b.auteur?escapeHtml(b.auteur):''}${b.lien?' • '+escapeHtml(b.lien):''}</div></div><button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeBiblio(${idx})">Supprimer</button></div>`;
     }).join('')}</div>`;
   }).join('') : `<div class="empty">Aucune source enregistrée</div>`;
 }
@@ -390,7 +392,7 @@ function renderAdMeditations(){
   const sorted=DB.meditations.slice().sort((a,b)=>a.date.localeCompare(b.date));
   el.innerHTML = sorted.length ? sorted.map(m=>{
     const idx=DB.meditations.indexOf(m);
-    return `<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;"><div><div class="li-name" style="font-size:13px;">${escapeHtml(m.classe)} — ${escapeHtml(m.livre)}</div><div class="li-sub">Le ${m.date}</div></div><button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeMeditation(${idx})">🗑</button></div>`;
+    return `<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;"><div><div class="li-name" style="font-size:13px;">${escapeHtml(m.classe)} — ${escapeHtml(m.livre)}</div><div class="li-sub">Le ${m.date}</div></div><button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeMeditation(${idx})">Supprimer</button></div>`;
   }).join('') : `<div class="empty">Aucune méditation programmée</div>`;
 }
 function addMeditation(){
@@ -417,7 +419,7 @@ function renderAdQuiz(){
     return `<div class="list-item" style="padding:8px 0;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div class="li-name" style="font-size:13px;">${escapeHtml(q.classe)} — Passage n°${q.numero}</div>
-        <button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeQuiz(${idx})">🗑</button>
+        <button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeQuiz(${idx})">Supprimer</button>
       </div>
       <div class="li-sub">Le ${q.date} • Référence : ${escapeHtml(q.livre)}${q.contenu?'<br>'+escapeHtml(q.contenu):''}</div>
     </div>`;
@@ -476,7 +478,7 @@ function renderAdSeances(){
   const statutLbl={programmee:['Programmée','by'],presentee:['Présentée — en attente de validation','by'],validee:['Présentation validée','bg']};
   el.innerHTML = sorted.length ? `<div style="display:flex;flex-direction:column;gap:10px;">${sorted.map(s=>{
     const [lbl,cls]=statutLbl[s.statut]||['—','bn'];
-    const waTag=(tel,texte)=>{ const l=waLink(tel,texte); return l?` <a href="${l}" target="_blank">📲</a>`:''; };
+    const waTag=(tel,texte)=>{ const l=waLink(tel,texte); return l?` <a class="pill-link" href="${l}" target="_blank">WhatsApp</a>`:''; };
     const pres=(s.presentateurs||[]).map(p=>`${escapeHtml(p.nom)} (${escapeHtml(p.tel||'—')})${waTag(p.tel,'Rappel : présentation de la méthodologie en '+s.classe+' le '+s.dateProgrammee+' — Salle '+s.salle+'.')}`).join(', ')||'—';
     const mod1=s.moderateur1?`${escapeHtml(s.moderateur1.nom)} (${escapeHtml(s.moderateur1.tel||'—')})${waTag(s.moderateur1.tel,'Rappel : séance méthodologie en '+s.classe+' le '+s.dateProgrammee+'.')}`:'—';
     const mod2=s.moderateur2?`${escapeHtml(s.moderateur2.nom)} (${escapeHtml(s.moderateur2.tel||'—')})${waTag(s.moderateur2.tel,'Rappel : séance méthodologie en '+s.classe+' le '+s.dateProgrammee+'.')}`:'';
@@ -490,7 +492,7 @@ function renderAdSeances(){
       <div class="li-sub" style="margin-top:6px;">Présentateur(s) : ${pres}<br>Modérateurs : ${mod1}${mod2?', '+mod2:''}<br>Thèmes proposés : ${escapeHtml(themes)}</div>
       ${s.compteRendu ? `<div class="li-sub" style="margin-top:6px;"><b>Compte-rendu :</b> ${escapeHtml(s.compteRendu)} (par ${escapeHtml(s.presentateur||'—')} le ${s.dateValidation})</div>` : ''}
       ${s.statut==='validee' ? `<div class="li-sub" style="margin-top:6px;">1er jet attendu le : <b>${s.dateDepotPremierJet}</b></div>` : ''}
-      ${s.statut==='presentee' ? `<button class="btn-sm btn-g" style="margin-top:8px;" onclick="validerPresentation('${s.id}')">✅ Valider la présentation</button>` : ''}
+      ${s.statut==='presentee' ? `<button class="btn-sm btn-g" style="margin-top:8px;" onclick="validerPresentation('${s.id}')">Valider la présentation</button>` : ''}
     </div>`;
   }).join('')}</div>` : `<div class="empty">Aucune séance programmée pour le moment</div>`;
 }
@@ -523,7 +525,7 @@ function validerPresentation(id){
 function renderAdSeancesAlertes(){
   const el=document.getElementById('ad-se-alertes');
   const alertes = DB.sessions.filter(s=>s.numero===1 && s.statut==='programmee' && s.dateReprise && joursDepuisStr(s.dateReprise)>=SEUIL_REPRISE_JOURS);
-  el.innerHTML = alertes.length ? `<div class="alert-banner">${alertes.map(s=>`⚠ ${escapeHtml(s.classe)} a fait sa rentrée le ${s.dateReprise} mais n'a toujours pas eu de passage de méthodologie (${joursDepuisStr(s.dateReprise)} jours).`).join('<br>')}</div>` : '';
+  el.innerHTML = alertes.length ? `<div class="alert-banner">${alertes.map(s=>`${escapeHtml(s.classe)} a fait sa rentrée le ${s.dateReprise} mais n'a toujours pas eu de passage de méthodologie (${joursDepuisStr(s.dateReprise)} jours).`).join('<br>')}</div>` : '';
 }
 
 /* ================= SORTIES DANS LES ÉGLISES FILLES ================= */
@@ -578,7 +580,7 @@ function renderAdSorties(){
     const postesTxt = POSTES_SORTIE.filter(p=>v.postes[p.key]).map(p=>{
       const person=v.postes[p.key];
       const link=waLink(person.tel, `Rappel : sortie à ${v.eglise} le ${v.date} — vous êtes ${p.label}.`);
-      return `${p.label} : ${escapeHtml(person.nom)} (${escapeHtml(person.tel||'—')})${link?` <a href="${link}" target="_blank">📲</a>`:''}`;
+      return `${p.label} : ${escapeHtml(person.nom)} (${escapeHtml(person.tel||'—')})${link?` <a class="pill-link" href="${link}" target="_blank">WhatsApp</a>`:''}`;
     }).join('<br>');
     return `<div class="list-item" style="border:1px solid var(--LINE);border-radius:10px;">
       <div class="li-top"><div class="li-name">${escapeHtml(v.eglise)}</div><span class="badge ${v.statut==='effectuee'?'bg':'by'}">${v.statut==='effectuee'?'Effectuée':'Programmée'}</span></div>
@@ -586,7 +588,7 @@ function renderAdSorties(){
       <div class="li-sub" style="margin-top:6px;">${postesTxt}</div>
       <div class="fg" style="margin-top:8px;"><label>Procès-verbal (PV) de la sortie</label><textarea rows="2" id="pv-${v.id}" placeholder="Compte-rendu de la sortie...">${escapeHtml(v.pv||'')}</textarea></div>
       <div style="display:flex;gap:8px;">
-        <button class="btn-sm btn-g" onclick="savePV('${v.id}')">💾 Enregistrer le PV</button>
+        <button class="btn-sm btn-g" onclick="savePV('${v.id}')">Enregistrer le PV</button>
         ${v.statut!=='effectuee' ? `<button class="btn-sm btn-y" onclick="marquerSortieEffectuee('${v.id}')">Marquer comme effectuée</button>` : ''}
       </div>
     </div>`;
@@ -710,7 +712,7 @@ function renderAdEtudiants(refill){
     const list=DB.etudiants.filter(e=>e.commission===g && (!q || normName(e.nom).includes(q)));
     if(!list.length) return;
     html+=`<div class="grp-h">${escapeHtml(String(g||'Sans commission').toUpperCase())} — Responsable : ${escapeHtml(commissionResponsable(g)||'—')} (${list.length})</div>`;
-    html+=list.map(e=>`<div class="list-item" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:180px;"><div class="li-name" style="font-size:13.5px;">${escapeHtml(e.nom)}</div><div class="li-sub">${defs.has(normName(e.nom))?'<span class="badge bg">Rapport définitif</span>':'<span class="badge br">Pas de rapport définitif</span>'}</div></div><select class="inline-in" onchange="changerCommissionEtudiant('${e.id}',this.value)">${commissionOptions(false,e.commission)}</select><button class="btn-xs b-del" onclick="supprimerEtudiant('${e.id}')">🗑</button></div>`).join('');
+    html+=list.map(e=>`<div class="list-item" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:180px;"><div class="li-name" style="font-size:13.5px;">${escapeHtml(e.nom)}</div><div class="li-sub">${defs.has(normName(e.nom))?'<span class="badge bg">Rapport définitif</span>':'<span class="badge br">Pas de rapport définitif</span>'}</div></div><select class="inline-in" onchange="changerCommissionEtudiant('${e.id}',this.value)">${commissionOptions(false,e.commission)}</select><button class="btn-xs b-del" onclick="supprimerEtudiant('${e.id}')">Supprimer</button></div>`).join('');
   });
   document.getElementById('ads-list').innerHTML = html || `<div class="empty">Aucun étudiant</div>`;
 }
@@ -826,7 +828,15 @@ function modelSorties(){
     sections:[{heading:'Sorties programmées et effectuées',columns:cols,rows,empty:'Aucune sortie programmée.'}],
     sheets:[{name:'Sorties',title:'Sorties dans les églises filles',columns:cols.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows}]};
 }
+function modelMembres(){
+  const cols=[W('N°',1,'center'),W('Nom',5.8),W('Rôle',3.6),W('Code',1.8,'center'),W('Téléphone',3.6),W('Église / groupe',3.6),W('État spirituel',2.2,'center'),W('Situation',4.4)];
+  const rows=DB.membres.map((m,i)=>[i+1,m.nom,m.role||'Membre',String(m.code||''),m.tel||'',m.eglise||'',m.spirituel||'',m.motifAbsence||'']);
+  return {title:'Membres de la Commission Exposé — codes personnels',landscape:true,subtitle:`${genLine()} • ${rows.length} membre(s) • Document confidentiel : à remettre à chaque membre`,fileName:'Membres_commission_codes',
+    sections:[{heading:'Liste des membres',columns:cols,rows,empty:'Aucun membre.'}],
+    sheets:[{name:'Membres',title:'Membres de la Commission Exposé — codes personnels',columns:cols.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows}]};
+}
 const EXPORTS = [
+  {id:'membres', t:'Membres de la commission et codes personnels', s:'Liste confidentielle à imprimer pour remettre à chaque membre son code', m:()=>modelMembres()},
   {id:'definitifs', t:'Rapports de stage définitifs — par commission', s:'Synthèse, liste par commission avec les responsables, étudiants sans définitif', m:()=>modelDefinitifs()},
   {id:'suivi_rapports', t:'Suivi complet des rapports de stage', s:'Tous les dépôts : statuts, responsables, mandataires, correcteurs, dates', m:()=>modelSuivi('rapport')},
   {id:'suivi_exposes', t:'Suivi complet des exposés', s:'Tous les exposés : classes, thèmes, modérateurs, correcteurs', m:()=>modelSuivi('expose')},
@@ -844,7 +854,7 @@ function fillExportSelectors(){
 function renderExportList(){
   document.getElementById('ad-ex-list').innerHTML = EXPORTS.map(e=>`
     <div class="exp-row"><div><div class="exp-t">${escapeHtml(e.t)}</div><div class="exp-s">${escapeHtml(e.s)}</div></div>
-    <div class="exp-btns"><button class="bw" onclick="runExport('${e.id}','docx')">📝 Word</button><button class="bx" onclick="runExport('${e.id}','xlsx')">📊 Excel</button><button class="bp" onclick="runExport('${e.id}','preview')">👁 Aperçu</button><button class="bp" onclick="runExport('${e.id}','print')">🖨 PDF</button></div></div>`).join('');
+    <div class="exp-btns"><button class="bw" onclick="runExport('${e.id}','docx')">Word</button><button class="bx" onclick="runExport('${e.id}','xlsx')">Excel</button><button class="bp" onclick="runExport('${e.id}','preview')">Aperçu</button><button class="bp" onclick="runExport('${e.id}','print')">PDF</button></div></div>`).join('');
 }
 function printHtml(html, landscape){
   const area=document.getElementById('print-area');
@@ -918,7 +928,7 @@ function addThemeRow(containerId, value){
   const c=document.getElementById(containerId);
   const row=document.createElement('div');
   row.className='theme-row';
-  row.innerHTML=`<input type="text" placeholder="Intitulé du thème..." value="${value?escapeHtml(value):''}"><button type="button" onclick="this.parentNode.remove()">✕</button>`;
+  row.innerHTML=`<input type="text" placeholder="Intitulé du thème..." value="${value?escapeHtml(value):''}"><button type="button" onclick="this.parentNode.remove()">Retirer</button>`;
   c.appendChild(row);
 }
 function getThemes(containerId){
@@ -931,3 +941,111 @@ function getThemes(containerId){
   if(ok) showAdmin();
   updateSyncBadge();
 })();
+
+/* ================================================================
+   TABLEAU DE BORD — toutes les statistiques du logiciel
+   ================================================================ */
+function barRows(items, opts){
+  opts=opts||{};
+  if(!items.length) return `<div class="empty">${opts.empty||'Aucune donnée pour le moment'}</div>`;
+  const max=Math.max(1,...items.map(i=>opts.pct?100:i.v));
+  return items.map(i=>{
+    const w = opts.pct ? Math.min(100,i.pct||0) : Math.round(i.v/max*100);
+    const val = opts.pct ? `${i.pct!==null&&i.pct!==undefined?i.pct+'%':'—'} <small>${i.v}/${i.t}</small>` : `${i.v}`;
+    const tip = opts.pct ? `${i.l} : ${i.v} sur ${i.t} (${i.pct||0}%)` : `${i.l} : ${i.v}`;
+    return `<div class="bar-row" title="${escapeHtml(tip)}"><div class="bl">${escapeHtml(i.l)}${i.s?`<small>${escapeHtml(i.s)}</small>`:''}</div><div class="bar-track"><div class="bar-fill" style="width:${w}%"></div></div><div class="bv">${val}</div></div>`;
+  }).join('');
+}
+function countBy(list, fn){ const m={}; list.forEach(x=>{ const k=fn(x); if(k) m[k]=(m[k]||0)+1; }); return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([l,v])=>({l,v})); }
+function dashboardStats(){
+  const today=todayStr(), ym=today.slice(0,7), year=today.slice(0,4);
+  const R=DB.rapports, E=DB.expositions;
+  const late = x => OUVERT(x.statut) && joursDepuis(x.tsDepot)>=RETARD_JOURS;
+  const corriges=[...R,...E].filter(x=>x.dateCorrection && x.dateDepot && CORRIGE(x.statut) && x.source!=='liste officielle');
+  const delai = corriges.length ? Math.round(corriges.reduce((s,x)=>s+Math.max(0,(new Date(x.dateCorrection)-new Date(x.dateDepot))/86400000),0)/corriges.length*10)/10 : null;
+  const presMois=DB.presences.filter(p=>p.date && p.date.startsWith(ym));
+  const alertesMembres=DB.membres.filter(m=>memberSundayAbsences(m.id).absences>=SEUIL_ABSENCES_DIMANCHE || niveauAlerte(m.financier) || niveauAlerte(m.spirituel)).length;
+  const defs=R.filter(x=>x.statut==='definitif').length;
+  return {today,ym,year,R,E,late,delai,presMois,alertesMembres,defs,
+    k:[
+      ['Étudiants inscrits',DB.etudiants.length,'n'],
+      ['Commissions',DB.commissions.length,'n'],
+      ['Membres de la commission',DB.membres.length,'n'],
+      ["Présents aujourd'hui",DB.presences.filter(p=>p.date===today).length,'g'],
+      ['Rapports définitifs',`${defs} <small>/ ${DB.etudiants.length}</small>`,'g'],
+      ['Étudiants sans définitif',etudiantsSansDefinitif().length,'r'],
+      ['Exposés enregistrés',E.length,'n'],
+      ['À corriger (exposés + rapports)',[...E,...R].filter(x=>x.statut==='depose').length,'y'],
+      ['En cours de correction',[...E,...R].filter(x=>x.statut==='en_correction').length,'y'],
+      ['En retard (+'+RETARD_JOURS+' jours)',[...E,...R].filter(late).length,'r'],
+      ['Corrigés à retirer',[...E,...R].filter(x=>x.statut==='corrige_complet'||x.statut==='corrige_partiel').length,'g'],
+      ['Délai moyen de correction',delai===null?'—':delai+' <small>jours</small>','n'],
+      ['Pointages ce mois',presMois.length,'g'],
+      ['Membres à suivre (alertes)',alertesMembres,alertesMembres?'r':'n'],
+      ['Messages non lus',DB.messages.filter(m=>!m.lu).length,'y'],
+      ['Sorties programmées',DB.sorties.filter(v=>v.statut!=='effectuee').length,'n']
+    ]};
+}
+function renderDashboard(){
+  const st=dashboardStats();
+  const d=new Date();
+  document.getElementById('db-maj').textContent=`Situation au ${frDate(st.today)} à ${pad(d.getHours())}h${pad(d.getMinutes())} — se met à jour automatiquement`;
+  document.getElementById('db-kpis').innerHTML=st.k.map(([l,v,c])=>`<div class="kpi kpi-${c}"><div class="kv">${v}</div><div class="kl">${l}</div></div>`).join('');
+  // alertes
+  const al=[];
+  const lateN=[...st.E,...st.R].filter(st.late).length;
+  if(lateN) al.push(`${lateN} document(s) attendent une correction depuis plus de ${RETARD_JOURS} jours.`);
+  commissionBreakdownRows('rapport').filter(r=>r.pct!==null && r.pct<SEUIL_COMMISSION_FAIBLE).forEach(r=>al.push(`Commission « ${escapeHtml(r.nom)} » : seulement ${r.n}/${r.total} rapports définitifs (${r.pct}%).`));
+  if(st.alertesMembres) al.push(`${st.alertesMembres} membre(s) à suivre (absences le dimanche ou situation signalée) — voir l'onglet Membres.`);
+  DB.sessions.filter(s=>s.numero===1 && s.statut==='programmee' && s.dateReprise && joursDepuisStr(s.dateReprise)>=SEUIL_REPRISE_JOURS).forEach(s=>al.push(`${escapeHtml(s.classe)} n'a pas encore eu sa présentation de méthodologie (rentrée le ${frDate(s.dateReprise)}).`));
+  document.getElementById('db-alertes').innerHTML = al.length ? `<div class="alert-banner">${al.join('<br>')}</div>` : '';
+  const stat = list => ['definitif','depose','en_correction','corrige_complet','corrige_partiel','retire','clos'].map(k=>({l:statutLabel(k)[0],v:list.filter(x=>x.statut===k).length})).filter(i=>i.v);
+  document.getElementById('db-rap-statut').innerHTML=barRows(stat(st.R),{empty:'Aucun rapport'});
+  document.getElementById('db-exp-statut').innerHTML=barRows(stat(st.E),{empty:'Aucun exposé enregistré pour le moment'});
+  document.getElementById('db-commissions').innerHTML=barRows(commissionBreakdownRows('rapport').map(r=>({l:r.nom,s:'Resp. : '+(r.responsable||'—'),v:r.n,t:r.total,pct:r.pct})),{pct:true,empty:'Aucune commission'});
+  document.getElementById('db-exp-classe').innerHTML=barRows(countBy(st.E,x=>x.classe),{empty:'Aucun exposé'});
+  document.getElementById('db-exp-phase').innerHTML=barRows(countBy(st.E,x=>x.phase),{empty:'Aucun exposé'});
+  // activité mensuelle : 3 petits graphiques (une seule mesure chacun)
+  document.getElementById('db-annee').textContent=st.year;
+  const inY = ds => ds && ds.slice(0,4)===st.year;
+  const monthly = (list, dateKey, filt) => MOIS_LBL.map((_,i)=>list.filter(x=>inY(x[dateKey]) && parseInt(x[dateKey].slice(5,7))-1===i && (!filt||filt(x))).length);
+  const chart = (titre, vals) => { const mx=Math.max(1,...vals); return `<div class="msec">${titre} — total ${vals.reduce((a,b)=>a+b,0)}</div><div class="months">${vals.map((v,i)=>`<div class="mcol" title="${MOIS_LBL[i]} : ${v}"><div class="mval">${v||''}</div><div class="mbar-wrap"><div class="mbar" style="height:${Math.round(v/mx*100)}%"></div></div><div class="mlbl">${MOIS_LBL[i].slice(0,3)}</div></div>`).join('')}</div>`; };
+  document.getElementById('db-mois').innerHTML =
+    chart('Exposés déposés', monthly(st.E,'dateDepot')) +
+    chart('Rapports de stage déposés (hors liste officielle)', monthly(st.R,'dateDepot',x=>x.source!=='liste officielle')) +
+    chart('Pointages des membres', monthly(DB.presences,'date'));
+  document.getElementById('db-membres').innerHTML=barRows(countBy(st.presMois,p=>p.membreNom).slice(0,12),{empty:'Aucun pointage ce mois-ci'});
+  document.getElementById('db-motifs').innerHTML=barRows(countBy(st.presMois,p=>p.motif),{empty:'Aucun pointage ce mois-ci'});
+  document.getElementById('db-correcteurs').innerHTML=barRows(countBy([...st.E,...st.R].filter(x=>x.correcteur && (CORRIGE(x.statut))),x=>x.correcteur).slice(0,12),{empty:'Aucune correction terminée'});
+  document.getElementById('db-lieux').innerHTML=barRows(countBy([...st.E,...st.R].filter(x=>x.source!=='liste officielle'),x=>x.lieu).slice(0,10),{empty:'Aucun dépôt pour le moment'});
+  const ses=DB.sessions, so=DB.sorties;
+  const pills=(arr)=>`<div class="mini-pills">${arr.map(([l,v])=>`<span><b>${v}</b>${l}</span>`).join('')}</div>`;
+  document.getElementById('db-activites').innerHTML =
+    `<div class="msec">Séances de méthodologie</div>`+pills([['programmées',ses.filter(s=>s.statut==='programmee').length],['présentées (à valider)',ses.filter(s=>s.statut==='presentee').length],['validées',ses.filter(s=>s.statut==='validee').length]])+
+    `<div class="msec" style="margin-top:14px;">Sorties dans les églises filles</div>`+pills([['programmées',so.filter(v=>v.statut!=='effectuee').length],['effectuées',so.filter(v=>v.statut==='effectuee').length],['PV rédigés',so.filter(v=>v.pv).length]])+
+    `<div class="msec" style="margin-top:14px;">Source Vases d'Honneur et calendrier</div>`+pills([['sources (Classe 1)',DB.bibliotheque.filter(b=>b.classe==='Classe 1').length],['sources (Classe 2)',DB.bibliotheque.filter(b=>b.classe==='Classe 2').length],['sources (Classe 3)',DB.bibliotheque.filter(b=>b.classe==='Classe 3').length],['méditations programmées',DB.meditations.length],['quiz bibliques',DB.quizBiblique.length]])+
+    `<div class="msec" style="margin-top:14px;">Notifications</div>`+pills([['messages envoyés',DB.messages.length],['non lus',DB.messages.filter(m=>!m.lu).length]]);
+}
+/* Export du tableau de bord (Word / Excel) */
+function exportDashboard(fmt){
+  const st=dashboardStats();
+  const strip = v => String(v).replace(/<[^>]+>/g,'');
+  const rowsOf = items => items.map(i=>[i.l,i.v]);
+  const stat = list => ['definitif','depose','en_correction','corrige_complet','corrige_partiel','retire','clos'].map(k=>({l:statutLabel(k)[0],v:list.filter(x=>x.statut===k).length})).filter(i=>i.v);
+  const co=commissionBreakdownRows('rapport').map(r=>[r.nom,r.responsable||'—',r.total,r.n,r.pct!==null?r.pct+'%':'—']);
+  const two=[W('Élément',8),W('Nombre',3,'center')];
+  const sections=[
+    {heading:'Chiffres clés',columns:[W('Indicateur',9),W('Valeur',4,'center')],rows:st.k.map(([l,v])=>[l,strip(v)])},
+    {heading:'Rapports de stage par statut',columns:two,rows:rowsOf(stat(st.R))},
+    {heading:'Exposés par statut',columns:two,rows:rowsOf(stat(st.E)),empty:'Aucun exposé.'},
+    {heading:'Rapports définitifs par commission',columns:[W('Commission',4.5),W('Responsable',5.5),W('Effectif',2,'center'),W('Définitifs',2.2,'center'),W('Taux',2,'center')],rows:co},
+    {heading:'Pointages des membres ce mois',columns:two,rows:rowsOf(countBy(st.presMois,p=>p.membreNom)),empty:'Aucun pointage ce mois-ci.'},
+    {heading:'Corrections terminées par correcteur',columns:two,rows:rowsOf(countBy([...st.E,...st.R].filter(x=>x.correcteur&&CORRIGE(x.statut)),x=>x.correcteur)),empty:'Aucune correction terminée.'}
+  ];
+  const m={title:'Tableau de bord — Commission Exposé',subtitle:genLine(),fileName:'Tableau_de_bord',sections,
+    sheets:sections.map(s=>({name:s.heading,title:s.heading,columns:s.columns.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows:s.rows}))};
+  const file='Tableau_de_bord_'+todayStr();
+  if(fmt==='xlsx') downloadBytes(OfficeExport.buildXlsx(m), file+'.xlsx', OfficeExport.MIME_XLSX);
+  else downloadBytes(OfficeExport.buildDocx(m), file+'.docx', OfficeExport.MIME_DOCX);
+  toast(fmt==='xlsx'?'Fichier Excel téléchargé':'Fichier Word téléchargé','ok');
+}

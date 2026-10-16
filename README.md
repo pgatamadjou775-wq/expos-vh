@@ -94,7 +94,7 @@ n'est pas accessible sur ce réseau.
 ---
 
 ## Vérifier que ça fonctionne
-- Sur l'accueil de l'interface étudiant, un bouton **"🔄 Actualiser"** permet de forcer la mise à jour.
+- Sur l'accueil de l'interface étudiant, un bouton **"Actualiser"** permet de forcer la mise à jour.
 - Si tout fonctionne : un pointage fait sur la tablette doit apparaître dans l'onglet "Membres" de l'administration après actualisation (ou automatiquement, sous 6 secondes).
 - Si le bouton "Actualiser" indique "Aucun serveur local détecté" : vérifiez que `node server.js` tourne toujours sur le PC, et que l'adresse tapée sur la tablette est correcte.
 
@@ -116,7 +116,7 @@ il faudra héberger `server.js` sur un vrai serveur en ligne — une étape diff
 ## Nouveautés — notifications automatiques
 Le logiciel envoie maintenant des messages automatiques (dépôt reçu, en cours de correction,
 correction terminée, retrait confirmé, programmation de séances/sorties...). Ces messages
-sont consultables depuis l'accueil étudiant, bouton **"🔔 Mes messages"**, en tapant le nom
+sont consultables depuis l'accueil étudiant, écran **"Mon suivi"** de l'appli Suivi, en tapant le nom
 du destinataire (étudiant, responsable de commission, modérateur, membre du jury...).
 Il n'y a pas d'envoi SMS ou email réel : c'est une messagerie interne à l'application, à consulter
 sur place ou en donnant le nom à la personne concernée.
@@ -138,13 +138,31 @@ sur place ou en donnant le nom à la personne concernée.
   ni les anciens dépôts « à corriger » d'un étudiant qui a déjà son définitif. Pas de doublon si l'étudiant redépose son définitif.
 - Deux correcteurs ne peuvent pas prendre le même document.
 
+## Membres de la commission (déjà dans la base)
+- 34 membres : le responsable **Dr Éric ZAGBEU** et les 33 « Stagiaires - Promo 10 » (avec téléphone, église et situation). État spirituel : Moyen pour tous.
+- Chacun a un **code personnel** (4 chiffres) pour l'Espace Correcteur.
+- Administration → **Exports** → « Membres de la commission et codes personnels » : liste à imprimer (Word / Excel) pour remettre son code à chacun.
+- Noms, codes, téléphones et rôles sont modifiables dans Administration → Configuration.
+
+## Tableau de bord
+L'administration s'ouvre sur un **tableau de bord** qui regroupe toutes les statistiques du logiciel :
+chiffres clés (étudiants, membres, présents, rapports définitifs, documents à corriger / en retard, délai moyen de correction,
+messages, sorties…), alertes, rapports et exposés par statut, taux de rapports définitifs par commission,
+exposés par classe et par phase, activité mois par mois, pointages et motifs de présence, corrections par correcteur,
+lieux de dépôt, séances, sorties, bibliothèque, méditations, quiz et notifications. Exportable en Word et en Excel.
+
+## Présentation
+Plus aucune icône : chaque page s'ouvre par une **pilule pleine largeur**, et tous les boutons, onglets et champs
+sont arrondis en forme de pilule.
+
 ## Administration (code par défaut : 2026)
 - **Rapports** : compteurs (dont rapports définitifs et étudiants sans définitif), répartition par commission,
   recherche et filtres, actions « Marquer définitif », « Annuler définitif », « Libérer » un document bloqué, « Supprimer ».
 - **Exposés** : mêmes outils, filtre par lieu de dépôt.
 - **Étudiants** : ajouter un étudiant, changer sa commission, le retirer.
 - **Configuration** : membres (nom, code, téléphone, situation…), responsables de commission, créneaux, motifs, lieux,
-  bibliothèque, méditations, quiz, et **code administrateur**. Les 4 membres fournis sont des exemples : remplacez-les.
-- **Exports Word / Excel** : 7 rapports prêts à imprimer, chacun en Word (.docx), Excel (.xlsx), aperçu et PDF :
+  bibliothèque, méditations, quiz, et **code administrateur**. 
+- **Tableau de bord** : toutes les statistiques (voir plus haut).
+- **Exports Word / Excel** : 8 rapports prêts à imprimer (dont la liste des membres et leurs codes), chacun en Word (.docx), Excel (.xlsx), aperçu et PDF :
   rapports définitifs par commission, suivi des rapports, suivi des exposés, liste des étudiants,
   journal de présence (année ou mois), sorties dans les églises filles, rapport d'évolution annuel.

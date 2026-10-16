@@ -19,27 +19,23 @@
       <div class="hero-title">BIENVENUE À LA<br><b>COMMISSION EXPOSÉ</b></div>
       <div class="hero-clock" id="home-date">—</div>
       <div class="hero-clock"><b id="home-time">--:--:--</b></div>
-      <button class="btn-sm" style="margin-top:14px;background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">🔄 Actualiser</button>
-      <div class="sync-badge" style="margin-top:8px;">●</div>
+      <button class="btn-sm" style="margin-top:14px;background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">Actualiser</button>
+      <div class="sync-badge" style="margin-top:8px;"></div>
     </div>
     <div class="tiles">
       <button class="tile tile-1" onclick="openPresence()">
-        <div class="tile-ico">🕒</div>
         <div class="tile-t">Pointer mon arrivée</div>
         <div class="tile-s">Membres de la commission</div>
       </button>
       <button class="tile tile-2" onclick="openExpose()">
-        <div class="tile-ico">📚</div>
         <div class="tile-t">Dépôt des exposés</div>
         <div class="tile-s">Déposer ou retirer un exposé corrigé</div>
       </button>
       <button class="tile tile-3" onclick="openRapport()">
-        <div class="tile-ico">📄</div>
         <div class="tile-t">Rapport de stage</div>
         <div class="tile-s">Déposer ou retirer mon rapport</div>
       </button>
       <button class="tile tile-4" onclick="openCorrection()">
-        <div class="tile-ico">✅</div>
         <div class="tile-t">Espace Correcteur</div>
         <div class="tile-s">Accès réservé — code personnel</div>
       </button>
@@ -51,7 +47,7 @@
 <div class="screen" id="s-presence">
   <div class="scr-head">
     <div class="scr-head-top">
-      <button class="back-ico" onclick="goHome()">←</button>
+      <button class="back-pill" onclick="goHome()">Retour</button>
       <div class="scr-title">Pointer mon arrivée</div>
     </div>
     <div class="scr-sub">Commission Exposé</div>
@@ -59,7 +55,7 @@
   <div class="scr-body">
 
     <div id="pr-search">
-      <div class="srch-box"><span class="srch-ico">🔍</span><input type="text" id="pr-s" placeholder="Rechercher votre nom..." oninput="prFilter()"></div>
+      <div class="srch-box"><input type="text" id="pr-s" placeholder="Rechercher votre nom..." oninput="prFilter()"></div>
       <div class="pick-list" id="pr-list"></div>
     </div>
 
@@ -103,7 +99,7 @@
 
     <div id="pr-success" class="hidden">
       <div class="suc-wrap">
-        <div class="suc-ico">✅</div>
+        
         <div class="suc-title" id="pr-suc-title">Pointage enregistré</div>
         <div class="suc-sub" id="pr-suc-sub"></div>
         <button class="btn btn-g" style="max-width:280px;" onclick="goHome()">Retour à l'accueil</button>
@@ -117,7 +113,7 @@
 <div class="screen" id="s-expose">
   <div class="scr-head">
     <div class="scr-head-top">
-      <button class="back-ico" onclick="goHome()">←</button>
+      <button class="back-pill" onclick="goHome()">Retour</button>
       <div class="scr-title">Dépôt des exposés</div>
     </div>
     <div class="scr-sub">Dépôt et retrait des documents</div>
@@ -167,7 +163,7 @@
 
     <!-- RETIRER -->
     <div id="ex-retirer" class="hidden">
-      <div class="srch-box"><span class="srch-ico">🔍</span><input type="text" id="ex-r-s" placeholder="Nom ou numéro de l'exposé..." oninput="renderExRetrait()"></div>
+      <div class="srch-box"><input type="text" id="ex-r-s" placeholder="Nom ou numéro de l'exposé..." oninput="renderExRetrait()"></div>
       <div class="pick-list" id="ex-r-list"></div>
     </div>
 
@@ -175,7 +171,7 @@
 
     <div id="ex-success" class="hidden">
       <div class="suc-wrap">
-        <div class="suc-ico" id="ex-suc-ico">✅</div>
+        
         <div class="suc-title" id="ex-suc-title"></div>
         <div class="suc-sub" id="ex-suc-sub"></div>
         <button class="btn btn-g" style="max-width:280px;" onclick="goHome()">Retour à l'accueil</button>
@@ -188,7 +184,7 @@
 <div class="screen" id="s-rapport">
   <div class="scr-head">
     <div class="scr-head-top">
-      <button class="back-ico" onclick="goHome()">←</button>
+      <button class="back-pill" onclick="goHome()">Retour</button>
       <div class="scr-title">Rapport de stage</div>
     </div>
     <div class="scr-sub">Dépôt et retrait des documents</div>
@@ -208,7 +204,7 @@
         <div class="fg"><label>Phase</label>
           <select id="rp-phase" onchange="rpPhaseInfo()"><option value="1ère correction">1ère correction</option><option value="Deuxième correction">Deuxième correction</option><option value="Dépôt définitif">Dépôt définitif</option></select>
         </div>
-        <div class="note-box partiel hidden" id="rp-phase-info" style="margin-top:0;"><div class="note-txt">📌 Rapport <b>définitif</b> : il est enregistré comme définitif et <b>ne passe pas en correction</b>.</div></div>
+        <div class="note-box partiel hidden" id="rp-phase-info" style="margin-top:0;"><div class="note-txt">Rapport <b>définitif</b> : il est enregistré comme définitif et <b>ne passe pas en correction</b>.</div></div>
         <div class="fg"><label>Commission</label><select id="rp-commission" onchange="rpCommissionChange()"></select></div>
         <div class="card" style="box-shadow:none;border:1.5px dashed var(--LINE);margin-bottom:13px;"><div class="card-b">
           <div class="hint" style="margin-bottom:8px;font-weight:700;color:var(--GRN);">Responsable de la commission (obligatoire)</div>
@@ -242,7 +238,7 @@
     </div>
 
     <div id="rp-retirer" class="hidden">
-      <div class="srch-box"><span class="srch-ico">🔍</span><input type="text" id="rp-r-s" placeholder="Nom ou numéro du rapport..." oninput="renderRpRetrait()"></div>
+      <div class="srch-box"><input type="text" id="rp-r-s" placeholder="Nom ou numéro du rapport..." oninput="renderRpRetrait()"></div>
       <div class="pick-list" id="rp-r-list"></div>
     </div>
 
@@ -250,7 +246,7 @@
 
     <div id="rp-success" class="hidden">
       <div class="suc-wrap">
-        <div class="suc-ico" id="rp-suc-ico">✅</div>
+        
         <div class="suc-title" id="rp-suc-title"></div>
         <div class="suc-sub" id="rp-suc-sub"></div>
         <button class="btn btn-g" style="max-width:280px;" onclick="goHome()">Retour à l'accueil</button>
@@ -263,7 +259,7 @@
 <div class="screen" id="s-correction">
   <div class="scr-head">
     <div class="scr-head-top">
-      <button class="back-ico" onclick="corLogout()">←</button>
+      <button class="back-pill" onclick="corLogout()">Retour</button>
       <div class="scr-title">Espace Correcteur</div>
     </div>
     <div class="scr-sub" id="cor-sub">Accès réservé aux membres de la commission</div>

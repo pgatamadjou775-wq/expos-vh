@@ -30,7 +30,7 @@ function addThemeRow(containerId, value){
   const c=document.getElementById(containerId);
   const row=document.createElement('div');
   row.className='theme-row';
-  row.innerHTML=`<input type="text" placeholder="Intitulé du thème..." value="${value?escapeHtml(value):''}"><button type="button" onclick="this.parentNode.remove()">✕</button>`;
+  row.innerHTML=`<input type="text" placeholder="Intitulé du thème..." value="${value?escapeHtml(value):''}"><button type="button" onclick="this.parentNode.remove()">Retirer</button>`;
   c.appendChild(row);
 }
 function getThemes(containerId){
@@ -81,7 +81,7 @@ function rpNomPick(id){
   const resp=e.responsable||commissionResponsable(e.commission);
   if(resp){ document.getElementById('rp-resp-nom').value=resp; rpRespAuto=resp; }
   const def=rapportDefinitifDe(e.nom);
-  document.getElementById('rp-nom-info').innerHTML = def ? `✅ Rapport définitif déjà enregistré (n° ${escapeHtml(def.numero)}).` : `Commission : <b>${escapeHtml(e.commission||'—')}</b>`;
+  document.getElementById('rp-nom-info').innerHTML = def ? `Rapport définitif déjà enregistré (n° ${escapeHtml(def.numero)}).` : `Commission : <b>${escapeHtml(e.commission||'—')}</b>`;
 }
 function exNomSearch(){
   const q=normName(document.getElementById('ex-nom').value);
@@ -118,8 +118,8 @@ const photoStore = { ex:[], rp:[] };
 function renderPhotoGrid(key, gridId){
   const grid=document.getElementById(gridId);
   const photos=photoStore[key];
-  grid.innerHTML = photos.map((src,i)=>`<div class="photo-thumb"><img src="${src}"><button class="rm" onclick="removePhoto('${key}','${gridId}',${i})">✕</button></div>`).join('')
-    + `<label class="photo-add">📷<input type="file" accept="image/*" capture="environment" onchange="addPhoto('${key}','${gridId}',this)"></label>`;
+  grid.innerHTML = photos.map((src,i)=>`<div class="photo-thumb"><img src="${src}"><button class="rm" onclick="removePhoto('${key}','${gridId}',${i})">×</button></div>`).join('')
+    + `<label class="photo-add">Ajouter une photo<input type="file" accept="image/*" capture="environment" onchange="addPhoto('${key}','${gridId}',this)"></label>`;
 }
 function addPhoto(key, gridId, input){
   const file=input.files[0]; if(!file) return;
@@ -160,7 +160,7 @@ function prFilter(){
   const list=document.getElementById('pr-list');
   const membres = DB.membres.filter(m=>normName(m.nom).includes(q));
   list.innerHTML = membres.length ? membres.map(m=>`<div class="pick-item" onclick="prSelect('${m.id}')"><div class="av">${escapeHtml(initials(m.nom))}</div><div><div class="pk-name">${escapeHtml(m.nom)}</div></div></div>`).join('')
-    : `<div class="empty"><div class="eico">🔍</div><p>Aucun membre trouvé</p></div>`;
+    : `<div class="empty"><p>Aucun membre trouvé</p></div>`;
 }
 function prSelect(id){
   prSelMembre = DB.membres.find(m=>m.id===id);
@@ -206,11 +206,11 @@ function prCheckSalle(){
   if(session){
     const presentateurs=(session.presentateurs||[]).map(p=>p.nom).join(', ')||'—';
     info.className='note-box complet';
-    info.innerHTML=`<div class="note-lbl">📍 Séance programmée aujourd'hui</div><div class="note-txt">Passage n°${session.numero} — Salle : <b>${escapeHtml(session.salle||'—')}</b> — ${classe}<br>Présentateur(s) prévu(s) : ${escapeHtml(presentateurs)}</div>`;
+    info.innerHTML=`<div class="note-lbl">Séance programmée aujourd'hui</div><div class="note-txt">Passage n°${session.numero} — Salle : <b>${escapeHtml(session.salle||'—')}</b> — ${classe}<br>Présentateur(s) prévu(s) : ${escapeHtml(presentateurs)}</div>`;
     row.classList.remove('hidden');
   } else {
     info.className='note-box partiel';
-    info.innerHTML=`<div class="note-lbl">ℹ️ Aucune séance programmée</div><div class="note-txt">Aucune présentation de méthodologie n'est programmée aujourd'hui pour ${classe}.</div>`;
+    info.innerHTML=`<div class="note-lbl">ℹ Aucune séance programmée</div><div class="note-txt">Aucune présentation de méthodologie n'est programmée aujourd'hui pour ${classe}.</div>`;
     row.classList.add('hidden');
     document.getElementById('pr-valid-meth').checked=false;
   }
@@ -242,7 +242,7 @@ function confirmArrivee(){
       session.presentateur=prSelMembre.nom;
       session.dateValidation=todayStr();
       session.compteRendu=document.getElementById('pr-compte-rendu').value.trim();
-      extraMsg = ' — Présentation effectuée ✅ (compte-rendu transmis à l\'administration pour validation finale)';
+      extraMsg = ' — Présentation effectuée (compte-rendu transmis à l\'administration pour validation finale)';
     } else if(session && !valide){
       extraMsg = ' — Séance programmée non encore validée.';
     }
@@ -324,7 +324,7 @@ function renderExRetrait(){
   if(q) d=d.filter(x=>normName(x.etudiantNom).includes(q)||normName(x.numero).includes(q));
   d.sort((a,b)=>b.tsDepot-a.tsDepot);
   list.innerHTML = d.length ? d.map(x=>`<div class="pick-item" onclick="openExRetraitDetail('${x.id}')"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.classe} • ${x.phase}</div></div><span class="badge ${x.statut==='corrige_complet'?'bg':'by'}">${x.statut==='corrige_complet'?'Complet':'Partiel'}</span></div>`).join('')
-    : `<div class="empty"><div class="eico">📭</div><p>Aucun exposé corrigé disponible pour ce nom</p></div>`;
+    : `<div class="empty"><p>Aucun exposé corrigé disponible pour ce nom</p></div>`;
 }
 function openExRetraitDetail(id){
   const x=DB.expositions.find(e=>e.id===id); if(!x) return;
@@ -336,7 +336,7 @@ function openExRetraitDetail(id){
       <div style="font-weight:700;font-size:15px;">${escapeHtml(x.etudiantNom)}</div>
       <div class="hint" style="margin-bottom:10px;">${x.numero} • ${x.classe} • ${x.phase}${x.lieu?' • '+escapeHtml(x.lieu):''}</div>
       <div class="note-box ${x.statut==='corrige_complet'?'complet':'partiel'}">
-        <div class="note-lbl">${x.statut==='corrige_complet'?'✅ Complètement corrigé':'⚠️ Partiellement corrigé'}</div>
+        <div class="note-lbl">${x.statut==='corrige_complet'?'Complètement corrigé':'Partiellement corrigé'}</div>
         <div class="note-txt">${x.commentaire ? escapeHtml(x.commentaire) : 'Aucune remarque particulière de la commission.'}</div>
       </div>
       <label class="chk-row"><input type="checkbox" id="ex-r-chk" onchange="document.getElementById('ex-r-btn').disabled=!this.checked"><span class="chk-txt">Je confirme avoir récupéré mon document corrigé.</span></label>
@@ -447,7 +447,7 @@ function renderRpRetrait(){
   if(q) d=d.filter(x=>normName(x.etudiantNom).includes(q)||normName(x.numero).includes(q));
   d.sort((a,b)=>b.tsDepot-a.tsDepot);
   list.innerHTML = d.length ? d.map(x=>`<div class="pick-item" onclick="openRpRetraitDetail('${x.id}')"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.phase}</div></div><span class="badge ${x.statut==='corrige_complet'?'bg':'by'}">${x.statut==='corrige_complet'?'Complet':'Partiel'}</span></div>`).join('')
-    : `<div class="empty"><div class="eico">📭</div><p>Aucun rapport corrigé disponible pour ce nom</p></div>`;
+    : `<div class="empty"><p>Aucun rapport corrigé disponible pour ce nom</p></div>`;
 }
 function openRpRetraitDetail(id){
   const x=DB.rapports.find(e=>e.id===id); if(!x) return;
@@ -459,7 +459,7 @@ function openRpRetraitDetail(id){
       <div style="font-weight:700;font-size:15px;">${escapeHtml(x.etudiantNom)}</div>
       <div class="hint" style="margin-bottom:10px;">${x.numero} • ${x.phase}${x.lieu?' • '+escapeHtml(x.lieu):''}</div>
       <div class="note-box ${x.statut==='corrige_complet'?'complet':'partiel'}">
-        <div class="note-lbl">${x.statut==='corrige_complet'?'✅ Complètement corrigé':'⚠️ Partiellement corrigé'}</div>
+        <div class="note-lbl">${x.statut==='corrige_complet'?'Complètement corrigé':'Partiellement corrigé'}</div>
         <div class="note-txt">${x.commentaire ? escapeHtml(x.commentaire) : 'Aucune remarque particulière de la commission.'}</div>
       </div>
       <label class="chk-row"><input type="checkbox" id="rp-r-chk" onchange="document.getElementById('rp-r-btn').disabled=!this.checked"><span class="chk-txt">Je confirme avoir récupéré mon rapport corrigé.</span></label>
@@ -536,7 +536,7 @@ function renderCorLists(){
   const mine=data.filter(x=>x.statut==='en_correction' && x.correcteur===corUser.nom && corVisible(x));
   const dispo=data.filter(x=>x.statut==='depose' && corVisible(x));
   const mineEl=document.getElementById('cor-mine'), dispoEl=document.getElementById('cor-dispo');
-  mineEl.innerHTML = mine.length ? mine.map(x=>`<div class="pick-item" onclick="corOpenFinaliser('${x.id}')"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase}${x.commentaireBrouillon?' • 💾 brouillon enregistré':''}</div></div><span class="badge by">En cours</span></div>`).join('') : `<div class="empty">Aucune correction en cours</div>`;
+  mineEl.innerHTML = mine.length ? mine.map(x=>`<div class="pick-item" onclick="corOpenFinaliser('${x.id}')"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase}${x.commentaireBrouillon?' • brouillon enregistré':''}</div></div><span class="badge by">En cours</span></div>`).join('') : `<div class="empty">Aucune correction en cours</div>`;
   dispoEl.innerHTML = dispo.length ? dispo.map(x=>`<div class="pick-item"><div class="av">${escapeHtml(initials(x.etudiantNom))}</div><div style="flex:1;"><div class="pk-name">${escapeHtml(x.etudiantNom)}</div><div class="pk-sub">${x.numero} • ${x.classe||''} • ${x.phase} • déposé ${x.dateDepot}</div></div><button class="btn-sm btn-g" onclick="corPrendre('${x.id}')">Prendre</button></div>`).join('') : `<div class="empty">Aucun document disponible pour le moment</div>`;
 }
 function corPrendre(id){
@@ -564,8 +564,8 @@ function corOpenFinaliser(id){
         </div>
       </div>
       <div class="fg"><label>Commentaire / remarques (envoyées automatiquement à l'étudiant)</label><textarea id="cor-comment" rows="3" placeholder="Remarques de la commission...">${escapeHtml(x.commentaireBrouillon||'')}</textarea></div>
-      <button class="btn btn-y" onclick="corFinaliser('${x.id}')">✅ Enregistrer la correction (terminée)</button>
-      <button class="btn btn-ghost" onclick="corSaveDraft('${x.id}')">💾 Enregistrer et continuer plus tard</button>
+      <button class="btn btn-y" onclick="corFinaliser('${x.id}')">Enregistrer la correction (terminée)</button>
+      <button class="btn btn-ghost" onclick="corSaveDraft('${x.id}')">Enregistrer et continuer plus tard</button>
       <button class="btn btn-ghost" onclick="corSwitch(corType)">Annuler</button>
     </div></div>`;
 }

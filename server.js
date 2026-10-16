@@ -42,7 +42,7 @@ const MIME = {
 /* ---------------- Données en mémoire ---------------- */
 let DB = null;
 try{ const t=fs.readFileSync(DATA_FILE,'utf8'); DB = t && t.trim()!=='null' ? JSON.parse(t) : null; }
-catch(e){ if(fs.existsSync(DATA_FILE)) console.error('⚠ data.json illisible — il sera conservé en data.corrompu.json'); try{ fs.copyFileSync(DATA_FILE, path.join(ROOT,'data.corrompu.json')); }catch(_){} DB=null; }
+catch(e){ if(fs.existsSync(DATA_FILE)) console.error('data.json illisible — il sera conservé en data.corrompu.json'); try{ fs.copyFileSync(DATA_FILE, path.join(ROOT,'data.corrompu.json')); }catch(_){} DB=null; }
 
 let writeTimer=null;
 function persist(){
@@ -151,7 +151,7 @@ function localIPs(){
 }
 
 server.on('error', e=>{
-  if(e.code==='EADDRINUSE') console.error(`\n⚠ Le port ${PORT} est déjà utilisé : le serveur tourne peut-être déjà dans une autre fenêtre.\n`);
+  if(e.code==='EADDRINUSE') console.error(`\nLe port ${PORT} est déjà utilisé : le serveur tourne peut-être déjà dans une autre fenêtre.\n`);
   else console.error(e);
   process.exit(1);
 });

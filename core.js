@@ -20,7 +20,7 @@ const NIVEAU_OPTIONS = ['Très faible','Faible','Moyen','Très bien'];
    Source : Etudiants_par_commission_2.docx (115 lignes, 16 commissions).
    Le responsable de commission est rattaché à chaque étudiant.
    Pour une commission rattachée à une église fille, le responsable est « Église fille ». */
-const DATA_VERSION = 2;
+const DATA_VERSION = 4;
 const OFFICIEL_COMMISSIONS = [
   {"id": "cm-01", "nom": "Logistique", "responsable": "TRAORE Charles", "totalAttendu": 16},
   {"id": "cm-02", "nom": "Cours", "responsable": "Mme OUALLE", "totalAttendu": 20},
@@ -157,15 +157,52 @@ const OFFICIEL_ETUDIANTS = [
   {"id": "st-115", "nom": "KOUAME Bérénice", "commission": "Secrétariat", "responsable": "NZAME Daisy", "classe": ""},
 ];
 
+
+/* Membres de la Commission Exposé (pointage + Espace Correcteur).
+   Liste = responsable de la commission + « STAGIAIRES - PROMO 10 » (liste transmise le 16/10/2026).
+   État spirituel : Moyen pour tous (modifiable dans Administration → Configuration).
+   Les codes personnels sont modifiables dans Administration → Configuration. */
+const OFFICIEL_MEMBRES = [
+  {"id": "mb-00", "nom": "Dr Éric ZAGBEU", "code": "3185", "role": "Responsable de la commission"},
+  {"id": "mp-01", "nom": "FLORA KOUAME", "code": "3435", "role": "Membre — Stagiaires Promo 10", "tel": "07 77 08 26 40", "eglise": "", "situation": "ETATS UNIS"},
+  {"id": "mp-02", "nom": "GRACE DEBAURAH NASSA", "code": "9234", "role": "Membre — Stagiaires Promo 10", "tel": "07 88 83 20 57", "eglise": "", "situation": "DISPONIBLE"},
+  {"id": "mp-03", "nom": "ANAIS BODOU ANE", "code": "3569", "role": "Membre — Stagiaires Promo 10", "tel": "07 09 17 37 32", "eglise": "", "situation": "DISPONIBLE"},
+  {"id": "mp-04", "nom": "JUNIOR YAHIRI", "code": "9028", "role": "Membre — Stagiaires Promo 10", "tel": "07 77 11 43 92", "eglise": "", "situation": "NOUV MARIE"},
+  {"id": "mp-05", "nom": "YANNICK YAO", "code": "4988", "role": "Membre — Stagiaires Promo 10", "tel": "07 79 79 07 71", "eglise": "", "situation": "INDISPONIBLE"},
+  {"id": "mp-06", "nom": "WILFRIED N'DOUMI", "code": "5788", "role": "Membre — Stagiaires Promo 10", "tel": "07 07 95 51 86", "eglise": "", "situation": "EN VOYAGE"},
+  {"id": "mp-07", "nom": "MATHIAS KOUASSI", "code": "9731", "role": "Membre — Stagiaires Promo 10", "tel": "05 05 99 79 03", "eglise": "", "situation": "PAS ENCORE EU DE RETOUR, CERTAINEMENT EN VOYAGE"},
+  {"id": "mp-08", "nom": "HELENA DESIREE GRACE KONAN", "code": "5010", "role": "Membre — Stagiaires Promo 10", "tel": "07 89 07 40 43", "eglise": "", "situation": "DISPONIBLE"},
+  {"id": "mp-09", "nom": "ANDERSON ALEX YAO", "code": "9528", "role": "Membre — Stagiaires Promo 10", "tel": "07 79 25 57 62", "eglise": "", "situation": ""},
+  {"id": "mp-10", "nom": "YAO ARIEL KPANGRAN TRAORE", "code": "3917", "role": "Membre — Stagiaires Promo 10", "tel": "07 47 88 74 18", "eglise": "", "situation": "PERMISSIONNAIRE"},
+  {"id": "mp-11", "nom": "FAITH MARY-ANN KONIAN LAUBOUET", "code": "6575", "role": "Membre — Stagiaires Promo 10", "tel": "07 59 25 67 44", "eglise": "", "situation": "SIGNALE LE CORPS SOUFFRANT"},
+  {"id": "mp-12", "nom": "PYRRHUS MADJOU GATA", "code": "4070", "role": "Membre — Stagiaires Promo 10", "tel": "07 11 61 54 39", "eglise": "", "situation": "DISPONIBLE"},
+  {"id": "mp-13", "nom": "GHISLAIN KIYOBIEN CAMARA", "code": "9019", "role": "Membre — Stagiaires Promo 10", "tel": "07 58 87 39 81", "eglise": "", "situation": ""},
+  {"id": "mp-14", "nom": "DESIREE KOUSSO AFFOH", "code": "8074", "role": "Membre — Stagiaires Promo 10", "tel": "07 68 03 56 69", "eglise": "", "situation": ""},
+  {"id": "mp-15", "nom": "EUGENIO N'GUESSAN DIBY", "code": "8107", "role": "Membre — Stagiaires Promo 10", "tel": "01 40 74 57 45", "eglise": "", "situation": ""},
+  {"id": "mp-16", "nom": "STELLA EKASSI", "code": "4815", "role": "Membre — Stagiaires Promo 10", "tel": "07 03 93 16 83", "eglise": "", "situation": ""},
+  {"id": "mp-17", "nom": "JEAN ORLANE NIAMIEN", "code": "8028", "role": "Membre — Stagiaires Promo 10", "tel": "01 40 87 77 56", "eglise": "", "situation": "EN MISSION, DOIT NORMALEMENT RENTRER SAMEDI SOIR"},
+  {"id": "mp-18", "nom": "REBECCA FAMEY", "code": "8438", "role": "Membre — Stagiaires Promo 10", "tel": "01 40 01 52 14", "eglise": "", "situation": "CORPS SOUFFRANT"},
+  {"id": "mp-19", "nom": "DORIANE GNOPO", "code": "7099", "role": "Membre — Stagiaires Promo 10", "tel": "07 69 23 12 97", "eglise": "", "situation": "BOUAKE"},
+  {"id": "mp-21", "nom": "ROSINE KEDEM", "code": "4306", "role": "Membre — Stagiaires Promo 10", "tel": "05 84 10 80 77", "eglise": "", "situation": "EN MISSION"},
+  {"id": "mp-22", "nom": "AMSTRONG BEUGRE", "code": "1344", "role": "Membre — Stagiaires Promo 10", "tel": "01 51 40 03 63", "eglise": "", "situation": "PERMISSIONNAIRE"},
+  {"id": "mp-23", "nom": "ACKOUNDZE MADELEINE", "code": "3956", "role": "Membre — Stagiaires Promo 10", "tel": "05 05 73 71 72", "eglise": "", "situation": "PERMISSIONNAIRE"},
+  {"id": "mp-24", "nom": "TAGRO CLEMENTINE", "code": "8442", "role": "Membre — Stagiaires Promo 10", "tel": "05 64 67 16 79", "eglise": "", "situation": ""},
+  {"id": "mp-25", "nom": "DEGBE CARLOS", "code": "5949", "role": "Membre — Stagiaires Promo 10", "tel": "05 02 34 97 94", "eglise": "CLASSE AMOUR ET...", "situation": "DISPONIBLE"},
+  {"id": "mp-26", "nom": "QUENUM RONAND", "code": "4792", "role": "Membre — Stagiaires Promo 10", "tel": "01 70 76 28 76", "eglise": "JOIE DIVINE", "situation": ""},
+  {"id": "mp-27", "nom": "ROMBA GERMAIN", "code": "8666", "role": "Membre — Stagiaires Promo 10", "tel": "07 08 06 86 70", "eglise": "JOIE DIVINE", "situation": "DISPONIBLE"},
+  {"id": "mp-28", "nom": "N'DA N'GORAN KOUADIO RAYMOND", "code": "4117", "role": "Membre — Stagiaires Promo 10", "tel": "05 55 21 52 17 / 05 00 62 11 68", "eglise": "BENEDICTIONS SANS LIMITES", "situation": ""},
+  {"id": "mp-29", "nom": "KOUAME AFFELY PIERRE ANSELME", "code": "8034", "role": "Membre — Stagiaires Promo 10", "tel": "01 53 96 13 53", "eglise": "BENEDICTIONS SANS LIMITES", "situation": ""},
+  {"id": "mp-30", "nom": "MANDO BI AKOULA EPHREM", "code": "4791", "role": "Membre — Stagiaires Promo 10", "tel": "07 77 97 77 78", "eglise": "AUTEL ROYAL", "situation": "DISPONIBLE"},
+  {"id": "mp-31", "nom": "BIO THERESE", "code": "3601", "role": "Membre — Stagiaires Promo 10", "tel": "07 58 04 17 00", "eglise": "AUTEL ROYAL", "situation": "CORPS SOUFFRANT"},
+  {"id": "mp-32", "nom": "DOGO RACHEL", "code": "8287", "role": "Membre — Stagiaires Promo 10", "tel": "07 08 06 81 84", "eglise": "AUTEL ROYAL", "situation": ""},
+  {"id": "mp-33", "nom": "ZEKRE VERONIQUE RAISSA", "code": "5845", "role": "Membre — Stagiaires Promo 10", "tel": "07 09 18 19 30", "eglise": "AUTEL ROYAL", "situation": ""},
+  {"id": "mp-34", "nom": "AOUONHO GUY ROLAND", "code": "1345", "role": "Membre — Stagiaires Promo 10", "tel": "07 89 33 10 75", "eglise": "", "situation": ""},
+];
+
 function seedDB(){
   return {
     etudiants:[],   // rempli par ensureOfficialData() avec la liste officielle
-    membres:[
-      {id:'m1',nom:'Jean Kouassi',code:'1111',tel:'',lieu:'',financier:'Moyen',spirituel:'Moyen',motifAbsence:''},
-      {id:'m2',nom:'Marie Ahou',code:'2222',tel:'',lieu:'',financier:'Moyen',spirituel:'Moyen',motifAbsence:''},
-      {id:'m3',nom:'Paul N\'Guessan',code:'3333',tel:'',lieu:'',financier:'Moyen',spirituel:'Moyen',motifAbsence:''},
-      {id:'m4',nom:'Grace Adjoua',code:'4444',tel:'',lieu:'',financier:'Moyen',spirituel:'Moyen',motifAbsence:''}
-    ],
+    membres:[],   // rempli par ensureOfficialData() (membres officiels de la commission)
     creneaux:[
       {id:'c1',jour:'Samedi',debut:'07:00',fin:'10:00',label:'07h - 10h'},
       {id:'c2',jour:'Samedi',debut:'10:00',fin:'13:00',label:'10h - 13h'},
@@ -213,6 +250,40 @@ function seedDB(){
 function normName(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
 function ensureOfficialData(db){
   if(!db || (db.dataVersion||0) >= DATA_VERSION) return false;
+  if((db.dataVersion||0) < 2) ensureListeV2(db);
+  if((db.dataVersion||0) < 3) ensureMembresV3(db);
+  if((db.dataVersion||0) < 4) ensureMembresV4(db);
+  db.dataVersion = DATA_VERSION;
+  return true;
+}
+/* v3 : membres officiels de la commission (les 4 membres d'exemple sont retirés) */
+function ensureMembresV3(db){
+  if(!db.membres) db.membres=[];
+  if(!db.tombstones) db.tombstones={};
+  const demo={m1:'Jean Kouassi',m2:'Marie Ahou',m3:"Paul N'Guessan",m4:'Grace Adjoua'};
+  db.membres.filter(m=>demo[m.id] && m.nom===demo[m.id]).forEach(m=>{ db.tombstones[m.id]=1; });
+  db.membres = db.membres.filter(m=>!(demo[m.id] && m.nom===demo[m.id]));
+  OFFICIEL_MEMBRES.forEach(o=>{
+    if(db.tombstones[o.id]) return;
+    if(db.membres.find(m=>m.id===o.id || normName(m.nom)===normName(o.nom))) return;
+    db.membres.push({id:o.id, nom:o.nom, code:o.code, role:o.role, tel:o.tel||'', eglise:o.eglise||'', lieu:'', financier:'Moyen', spirituel:'Moyen', motifAbsence:o.situation||''});
+  });
+}
+/* v4 : liste réelle des membres (Stagiaires Promo 10) — remplace la liste provisoire mb-01..mb-21 ;
+   état spirituel « Moyen » pour tous les membres */
+function ensureMembresV4(db){
+  const provisoires = db.membres.filter(m=>/^mb-(0[1-9]|1[0-9]|2[01])$/.test(m.id));
+  provisoires.forEach(m=>{ db.tombstones[m.id]=1; });
+  db.membres = db.membres.filter(m=>!/^mb-(0[1-9]|1[0-9]|2[01])$/.test(m.id));
+  ensureMembresV3(db);
+  db.membres.forEach(m=>{
+    m.spirituel='Moyen';
+    const o=OFFICIEL_MEMBRES.find(x=>x.id===m.id);
+    if(o){ if(o.tel && !m.tel) m.tel=o.tel; if(o.eglise && !m.eglise) m.eglise=o.eglise; if(o.situation && !m.motifAbsence) m.motifAbsence=o.situation; }
+  });
+}
+/* v2 : liste officielle des étudiants, commissions, responsables et rapports définitifs */
+function ensureListeV2(db){
   if(!db.etudiants) db.etudiants=[];
   if(!db.commissions) db.commissions=[];
   if(!db.rapports) db.rapports=[];
@@ -255,8 +326,6 @@ function ensureOfficialData(db){
       source:'liste officielle', dateDepot:ds, heureDepot:'', tsDepot:new Date(ds+'T08:00:00').getTime(), dateCorrection:'', dateRetrait:''
     });
   });
-  db.dataVersion = DATA_VERSION;
-  return true;
 }
 // Rapport définitif déjà enregistré pour ce nom d'étudiant (ou undefined)
 function rapportDefinitifDe(nom){ const n=normName(nom); return (DB.rapports||[]).find(r=>r.statut==='definitif' && normName(r.etudiantNom)===n); }
@@ -391,7 +460,7 @@ function pullRemote(silent){ return syncNow(!silent); }
 function manualRefresh(){ syncNow(true); }
 function updateSyncBadge(){
   document.querySelectorAll('.sync-badge').forEach(el=>{
-    el.textContent = SERVER_CONNECTE ? (DIRTY?'● Synchronisation…':'● Connecté au serveur') : '● Hors-ligne';
+    el.textContent = SERVER_CONNECTE ? (DIRTY?'Synchronisation…':'Connecté au serveur') : 'Hors-ligne';
     el.style.color = SERVER_CONNECTE ? (DIRTY?'#f0b90b':'#9be3c4') : '#ffb4b8';
   });
 }
