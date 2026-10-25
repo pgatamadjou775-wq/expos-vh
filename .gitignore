@@ -1,0 +1,11 @@
+# DONNÉES — ne JAMAIS les mettre sur GitHub (sinon un redéploiement les écraserait
+# et elles seraient visibles par tous). Elles restent sur le PC ou sur le disque persistant.
+data.json
+data.json.tmp
+data.corrompu.json
+push.json
+photos/
+sauvegardes/
+*.tmp
+node_modules/
+.DS_Store

@@ -24,14 +24,30 @@ const os = require('os');
 
 const PORT = parseInt(process.env.PORT,10) || 8000;
 const ROOT = __dirname;
-const DATA_FILE = path.join(ROOT, 'data.json');
-const PHOTO_DIR = path.join(ROOT, 'photos');
-const BACKUP_DIR = path.join(ROOT, 'sauvegardes');
+/* DONNÉES SÉPARÉES DU CODE (comme le modèle « resto ») :
+   - en local : à côté de server.js (rien ne change)
+   - en ligne (Render, Railway, VPS) : sur un DISQUE PERSISTANT, en indiquant
+     DATA_DIR=/data (ou DATA_FILE=/data/data.json). Un redéploiement depuis GitHub
+     remplace le code mais ne touche jamais ce dossier → aucune donnée perdue. */
+const DATA_DIR = process.env.DATA_DIR || (process.env.DATA_FILE ? path.dirname(process.env.DATA_FILE) : ROOT);
+const DATA_FILE = process.env.DATA_FILE || path.join(DATA_DIR, 'data.json');
+const PHOTO_DIR = path.join(DATA_DIR, 'photos');
+const BACKUP_DIR = path.join(DATA_DIR, 'sauvegardes');
+try{ fs.mkdirSync(DATA_DIR,{recursive:true}); }catch(e){}
+// Première mise en place du disque persistant : on y recopie les données présentes à côté du code
+if(path.resolve(DATA_DIR)!==path.resolve(ROOT) && !fs.existsSync(DATA_FILE) && fs.existsSync(path.join(ROOT,'data.json'))){
+  try{
+    fs.copyFileSync(path.join(ROOT,'data.json'), DATA_FILE);
+    if(fs.existsSync(path.join(ROOT,'push.json')) && !fs.existsSync(path.join(DATA_DIR,'push.json'))) fs.copyFileSync(path.join(ROOT,'push.json'), path.join(DATA_DIR,'push.json'));
+    if(fs.existsSync(path.join(ROOT,'photos'))){ fs.mkdirSync(path.join(DATA_DIR,'photos'),{recursive:true}); fs.readdirSync(path.join(ROOT,'photos')).forEach(f=>{ const d=path.join(DATA_DIR,'photos',f); if(!fs.existsSync(d)) fs.copyFileSync(path.join(ROOT,'photos',f), d); }); }
+    console.log('Données recopiées vers le disque persistant : '+DATA_DIR);
+  }catch(e){ console.error('Recopie des données impossible :', e.message); }
+}
 
 // Doit correspondre à core.js
 const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes'];
 const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode','reglages'];
-const PUSH_FILE = path.join(ROOT, 'push.json');   // clés VAPID + abonnements (jamais envoyé aux appareils)
+const PUSH_FILE = path.join(DATA_DIR, 'push.json');   // clés VAPID + abonnements (jamais envoyé aux appareils)
 
 const MIME = {
   '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
@@ -45,7 +61,7 @@ const MIME = {
 /* ---------------- Données en mémoire ---------------- */
 let DB = null;
 try{ const t=fs.readFileSync(DATA_FILE,'utf8'); DB = t && t.trim()!=='null' ? JSON.parse(t) : null; }
-catch(e){ if(fs.existsSync(DATA_FILE)) console.error('data.json illisible — il sera conservé en data.corrompu.json'); try{ fs.copyFileSync(DATA_FILE, path.join(ROOT,'data.corrompu.json')); }catch(_){} DB=null; }
+catch(e){ if(fs.existsSync(DATA_FILE)) console.error('data.json illisible — il sera conservé en data.corrompu.json'); try{ fs.copyFileSync(DATA_FILE, path.join(DATA_DIR,'data.corrompu.json')); }catch(_){} DB=null; }
 
 let writeTimer=null;
 function persist(){
@@ -283,6 +299,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ---- Photos de couverture (dossier de données) ----
+  if(urlPath0.startsWith('/photos/')){
+    const nom=path.basename(decodeURIComponent(urlPath0));
+    fs.readFile(path.join(PHOTO_DIR, nom), (err, c)=>{
+      if(err){ res.writeHead(404); res.end('Photo introuvable'); return; }
+      res.writeHead(200, {'Content-Type': nom.endsWith('.png')?'image/png':'image/jpeg', 'Cache-Control':'max-age=86400'}); res.end(c);
+    });
+    return;
+  }
+  // ---- Petit contrôle de santé pour l'hébergeur ----
+  if(urlPath0 === '/api/sante'){ sendJSON(res,200,{ok:true, donnees: DB ? true : false, dossier: DATA_DIR===ROOT?'local':'disque persistant'}); return; }
+
   // ---- Fichiers statiques ----
   let urlPath = urlPath0;
   if(urlPath === '/') urlPath = '/index.html';
@@ -313,6 +341,9 @@ server.on('error', e=>{
 });
 
 loadPush();
+// Avant un arrêt (redéploiement, redémarrage) : on écrit tout de suite les données en attente
+function ecrireMaintenant(){ try{ if(DB){ clearTimeout(writeTimer); fs.writeFileSync(DATA_FILE, JSON.stringify(DB)); } }catch(e){ console.error(e.message); } }
+['SIGTERM','SIGINT'].forEach(sig=>process.on(sig, ()=>{ ecrireMaintenant(); process.exit(0); }));
 server.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('=================================================');
@@ -321,6 +352,7 @@ server.listen(PORT, '0.0.0.0', () => {
   const ips=localIPs();
   if(ips.length) ips.forEach(ip=>console.log(' Sur la tablette (même Wi-Fi) : http://' + ip + ':' + PORT));
   else console.log(' Sur la tablette (même Wi-Fi) : http://<IP-DE-CE-PC>:' + PORT);
+  console.log(' Données : ' + DATA_FILE);
   console.log(' Laissez cette fenêtre ouverte pendant l\'utilisation.');
   console.log('=================================================');
   console.log('');

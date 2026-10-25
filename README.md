@@ -201,3 +201,27 @@ Ce qui existait est conservé (messagerie interne, bouton WhatsApp) et complét�
 - Seuils d'alerte : jours de retard, taux faible d'une commission, dimanches d'absence, délai de méthodologie.
 - Déjà modifiables : membres et codes, commissions et responsables, étudiants, créneaux, motifs, lieux,
   bibliothèque, méditations, quiz, code administrateur, modèles de messages.
+
+---
+
+## Redéployer depuis GitHub SANS PERDRE LES DONNÉES
+Le code et les données sont séparés :
+- **Code** (sur GitHub) : tous les fichiers du dossier.
+- **Données** (jamais sur GitHub, voir `.gitignore`) : `data.json`, `push.json`, `photos/`, `sauvegardes/`.
+
+### Hébergé en ligne (Render, Railway, VPS)
+1. Créez un **disque persistant** (Render : « Disks », Railway : « Volume ») monté sur `/data`.
+2. Ajoutez la variable d'environnement **`DATA_DIR=/data`** (déjà prévue dans `render.yaml`).
+3. Poussez le code sur GitHub : l'hébergeur redéploie, le dossier `/data` n'est jamais touché.
+4. Vérifiez : `https://votre-adresse/api/sante` doit afficher `"dossier":"disque persistant"`.
+
+Au premier démarrage avec le disque, si un `data.json` est encore à côté du code, il est recopié automatiquement sur le disque.
+Avant chaque arrêt (redéploiement), le serveur écrit immédiatement les données en attente.
+
+### Sur le PC (serveur local)
+Remplacez seulement les fichiers du code ; ne supprimez pas `data.json`, `push.json`, `photos/` ni `sauvegardes/`.
+
+### Filet de sécurité
+- Une copie datée de la base est faite chaque jour dans `sauvegardes/`.
+- Chaque tablette / téléphone garde une copie locale : si le serveur redémarrait vide, le premier appareil qui se reconnecte lui renvoie ses données.
+- Avant un premier passage en ligne, téléchargez une copie de `data.json` (et `photos/`).

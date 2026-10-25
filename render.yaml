@@ -1,0 +1,19 @@
+# Déploiement sur Render (https://render.com) depuis GitHub, SANS PERTE DE DONNÉES :
+# les données sont sur un disque persistant monté sur /data (DATA_DIR=/data).
+# Un nouveau « push » sur GitHub remplace seulement le code, jamais /data.
+services:
+  - type: web
+    name: commission-expose
+    runtime: node
+    plan: starter            # le disque persistant demande une offre payante (pas l'offre gratuite)
+    buildCommand: "echo 'Aucune dépendance à installer'"
+    startCommand: node server.js
+    healthCheckPath: /api/sante
+    autoDeploy: true
+    envVars:
+      - key: DATA_DIR
+        value: /data
+    disk:
+      name: donnees
+      mountPath: /data
+      sizeGB: 1
