@@ -166,3 +166,38 @@ sont arrondis en forme de pilule.
 - **Exports Word / Excel** : 8 rapports prêts à imprimer (dont la liste des membres et leurs codes), chacun en Word (.docx), Excel (.xlsx), aperçu et PDF :
   rapports définitifs par commission, suivi des rapports, suivi des exposés, liste des étudiants,
   journal de présence (année ou mois), sorties dans les églises filles, rapport d'évolution annuel.
+
+---
+
+## Notifications (version mixte avec le modèle « resto »)
+Ce qui existait est conservé (messagerie interne, bouton WhatsApp) et complété par :
+- **Temps réel** : le serveur garde une connexion ouverte avec chaque écran. Un dépôt, une correction, un message
+  apparaissent **immédiatement** partout (plus besoin d'attendre ni d'actualiser).
+- **Bandeau + son + vibration** : sur le téléphone de l'étudiant (appli Suivi), sur la tablette (Espace Correcteur :
+  « Nouvel exposé à corriger ») et sur le PC de l'administration (« Nouvel exposé déposé », « Arrivée pointée »).
+  Bouton « Activer les alertes du bureau » pour être prévenu même si l'onglet est en arrière-plan.
+- **Notifications push** (téléphone verrouillé, application fermée) : dans Suivi → « Activer les notifications ».
+  Comme pour le modèle, les navigateurs l'exigent en **HTTPS** : il faut publier le serveur en ligne
+  (Render, Railway, VPS…). Sur le Wi-Fi local, le bandeau + son fonctionnent tant que l'application est ouverte.
+  Sur iPhone : « Ajouter à l'écran d'accueil » d'abord (iOS 16.4 ou plus).
+- **Appli Suivi** : chacun choisit son nom une seule fois ; compteur de messages non lus, « Tout marquer comme lu ».
+- **Administration → Notifications** : envoyer un message à une personne, à tout le monde, à tous les étudiants,
+  à tous les membres ou à une commission ; **messages programmés** (jours + heure, ex. rappel chaque samedi à 8 h,
+  envoyés automatiquement par le serveur) ; historique avec lu / non lu ; **modèles des messages automatiques modifiables**.
+- Les clés et abonnements push sont dans `push.json` (jamais envoyé aux appareils). Gardez-le avec `data.json`.
+
+## Aucun doublon
+- Les doublons exacts déjà présents ont été retirés automatiquement (ex. « KOUAKOU AYA », « GNOLOU VIRGINIE »),
+  leurs dépôts rattachés à la fiche conservée ; un seul rapport définitif par étudiant.
+- Tout ajout en double est refusé (majuscules, accents et titres « Mme », « Dr »… ignorés) : étudiants, membres,
+  codes personnels, commissions, lieux, motifs, sources, classes, phases, messages, abonnements.
+- Administration → Étudiants (et Configuration → Membres) : panneau **« Doublons possibles »** (ex. « Mme ABI née Mudulo… »
+  et « ABI NEE MUDULO MIANDABU ») avec « Garder celui-ci » ou « Ce ne sont pas des doublons ».
+
+## Tout est personnalisable (Administration → Configuration → Personnalisation)
+- Textes d'accueil de la tablette et de l'appli Suivi.
+- Listes : classes, phases des exposés, phases des rapports (« Dépôt définitif » est obligatoire),
+  niveaux de situation des membres, types de sources. Renommer met à jour toutes les fiches concernées.
+- Seuils d'alerte : jours de retard, taux faible d'une commission, dimanches d'absence, délai de méthodologie.
+- Déjà modifiables : membres et codes, commissions et responsables, étudiants, créneaux, motifs, lieux,
+  bibliothèque, méditations, quiz, code administrateur, modèles de messages.

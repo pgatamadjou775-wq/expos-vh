@@ -16,6 +16,8 @@
    ============================================================ */
 
 const http = require('http');
+const https = require('https');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -27,8 +29,9 @@ const PHOTO_DIR = path.join(ROOT, 'photos');
 const BACKUP_DIR = path.join(ROOT, 'sauvegardes');
 
 // Doit correspondre à core.js
-const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages'];
-const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode'];
+const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes'];
+const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode','reglages'];
+const PUSH_FILE = path.join(ROOT, 'push.json');   // clés VAPID + abonnements (jamais envoyé aux appareils)
 
 const MIME = {
   '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
@@ -105,8 +108,158 @@ function sendJSON(res, code, obj){
   res.end(typeof obj==='string'?obj:JSON.stringify(obj));
 }
 
+/* ============================================================
+   TEMPS RÉEL (Server-Sent Events) — même principe que le modèle « resto »
+   ============================================================ */
+const streams = new Set();
+function sseSend(res, ev, data){ try{ res.write(`event: ${ev}\ndata: ${JSON.stringify(data)}\n\n`); }catch(e){} }
+function toAll(ev, data){ for(const r of streams) sseSend(r, ev, data); }
+setInterval(()=>{ for(const r of streams){ try{ r.write(': ping\n\n'); }catch(e){} } }, 25000);
+
+/* ============================================================
+   NOTIFICATIONS PUSH (VAPID + chiffrement aes128gcm, RFC 8291/8292)
+   Aucune bibliothèque : uniquement le module crypto de Node.js.
+   Fonctionne quand l'application est ouverte en HTTPS (serveur en ligne)
+   ou sur « localhost ». Les clés et abonnements restent dans push.json.
+   ============================================================ */
+let PUSH = null;
+function loadPush(){
+  try{ PUSH=JSON.parse(fs.readFileSync(PUSH_FILE,'utf8')); }catch(e){ PUSH=null; }
+  if(!PUSH || !PUSH.vapid){
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', { namedCurve:'prime256v1' });
+    const jwk = privateKey.export({ format:'jwk' });
+    const pub = publicKey.export({ format:'der', type:'spki' }).subarray(-65);
+    PUSH = { vapid:{ publicKey: pub.toString('base64url'), privateJwk: jwk }, abonnements: (PUSH&&PUSH.abonnements)||[] };
+    savePush();
+  }
+  if(!Array.isArray(PUSH.abonnements)) PUSH.abonnements=[];
+}
+function savePush(){ try{ fs.writeFileSync(PUSH_FILE, JSON.stringify(PUSH)); }catch(e){ console.error('push.json', e.message); } }
+function vapidAuthHeader(endpoint){
+  const aud=new URL(endpoint).origin;
+  const b64=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
+  const unsigned=b64({typ:'JWT',alg:'ES256'})+'.'+b64({aud, exp:Math.floor(Date.now()/1000)+12*3600, sub:'mailto:infos@acdees.com'});
+  const key=crypto.createPrivateKey({key:PUSH.vapid.privateJwk, format:'jwk'});
+  const sig=crypto.sign('sha256', Buffer.from(unsigned), {key, dsaEncoding:'ieee-p1363'}).toString('base64url');
+  return `vapid t=${unsigned}.${sig}, k=${PUSH.vapid.publicKey}`;
+}
+function encryptPush(sub, payload){
+  const uaPublic=Buffer.from(sub.keys.p256dh,'base64url'), authSecret=Buffer.from(sub.keys.auth,'base64url');
+  const ecdh=crypto.createECDH('prime256v1'); ecdh.generateKeys();
+  const asPublic=ecdh.getPublicKey(), shared=ecdh.computeSecret(uaPublic);
+  const hmac=(k,d)=>crypto.createHmac('sha256',k).update(d).digest();
+  const prkKey=hmac(authSecret, shared);
+  const ikm=hmac(prkKey, Buffer.concat([Buffer.from('WebPush: info\0'), uaPublic, asPublic, Buffer.from([1])]));
+  const salt=crypto.randomBytes(16), prk=hmac(salt, ikm);
+  const cek=hmac(prk, Buffer.from('Content-Encoding: aes128gcm\0\x01')).subarray(0,16);
+  const nonce=hmac(prk, Buffer.from('Content-Encoding: nonce\0\x01')).subarray(0,12);
+  const cipher=crypto.createCipheriv('aes-128-gcm', cek, nonce);
+  const ct=Buffer.concat([cipher.update(Buffer.concat([Buffer.from(payload), Buffer.from([2])])), cipher.final(), cipher.getAuthTag()]);
+  const header=Buffer.alloc(21); salt.copy(header,0); header.writeUInt32BE(4096,16); header[20]=65;
+  return Buffer.concat([header, asPublic, ct]);
+}
+function sendPush(sub, payloadObj){
+  let body, auth;
+  try{ body=encryptPush(sub, JSON.stringify(payloadObj)); auth=vapidAuthHeader(sub.endpoint); }catch(e){ return; }
+  const u=new URL(sub.endpoint);
+  const rq=https.request({method:'POST', hostname:u.hostname, port:u.port||443, path:u.pathname+u.search,
+    headers:{'Content-Encoding':'aes128gcm','Content-Type':'application/octet-stream','Content-Length':body.length, TTL:'86400', Urgency:'high', Authorization:auth}}, r=>{
+    r.resume();
+    if(r.statusCode===404 || r.statusCode===410){ PUSH.abonnements=PUSH.abonnements.filter(a=>a.endpoint!==sub.endpoint); savePush(); }
+  });
+  rq.on('error',()=>{}); rq.setTimeout(10000,()=>rq.destroy()); rq.end(body);
+}
+const normName = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+// Même règle que messageConcerne() dans core.js
+function concerne(m, nom){
+  const n=normName(nom); if(!n) return false;
+  if(!m.cible || m.cible==='personne') return normName(m.nom)===n;
+  if(m.cible==='tous') return true;
+  const etu=(DB.etudiants||[]).find(e=>normName(e.nom)===n), mem=(DB.membres||[]).find(x=>normName(x.nom)===n);
+  if(m.cible==='etudiants') return !!etu;
+  if(m.cible==='membres') return !!mem;
+  if(m.cible==='commission') return !!(etu && etu.commission===m.commission);
+  return false;
+}
+// Un nouveau message : écrans ouverts prévenus + notification push aux abonnés concernés
+function diffuserMessage(m){
+  toAll('notif', m);
+  const vus=new Set();
+  PUSH.abonnements.forEach(a=>{
+    if(!concerne(m, a.nom) || vus.has(a.endpoint)) return;
+    vus.add(a.endpoint);
+    sendPush(a, {title:m.titre||'Commission Exposé', body:m.texte, tag:'ce-'+m.id, url:'suivi.html?vue=suivi'});
+  });
+}
+// Détection de ce qui est nouveau après une synchronisation
+function idsDe(db, k){ return new Set(((db&&db[k])||[]).map(r=>r.id)); }
+function analyserNouveautes(avant, apres){
+  const recent = Date.now()-6*3600*1000;   // on ne renotifie pas les vieux messages d'un appareil resté hors-ligne
+  const mAvant=idsDe(avant,'messages');
+  (apres.messages||[]).forEach(m=>{ if(!mAvant.has(m.id) && (m.ts||0)>recent) diffuserMessage(m); });
+  [['expositions','expose'],['rapports','rapport'],['presences','presence']].forEach(([k,type])=>{
+    const ids=idsDe(avant,k);
+    (apres[k]||[]).forEach(r=>{
+      if(ids.has(r.id) || r.source==='liste officielle') return;
+      const ts = r.tsDepot || r.tsArrivee || 0; if(ts<recent) return;
+      toAll('activite', {type, nom:r.etudiantNom||r.membreNom||'', numero:r.numero||'', statut:r.statut||'', motif:r.motif||'', phase:r.phase||''});
+    });
+  });
+}
+
+/* ============================================================
+   MESSAGES PROGRAMMÉS (ex. rappel chaque samedi à 8 h) — vérifiés toutes les 30 s
+   ============================================================ */
+const pad2 = n => String(n).padStart(2,'0');
+setInterval(()=>{
+  if(!DB || !Array.isArray(DB.programmes)) return;
+  const d=new Date(), date=d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()), heure=pad2(d.getHours())+':'+pad2(d.getMinutes());
+  let change=false;
+  DB.programmes.forEach(p=>{
+    if(!p.actif || p.dernierEnvoi===date) return;
+    if(!(p.jours||[]).includes(d.getDay())) return;
+    if(heure < (p.heure||'08:00')) return;
+    p.dernierEnvoi=date; p._u=Date.now(); change=true;
+    const [h,mi]=(p.heure||'08:00').split(':').map(Number);
+    if((d.getHours()*60+d.getMinutes())-(h*60+mi) > 120) return;   // serveur éteint à l'heure prévue : on n'envoie pas en retard
+    const m={id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), nom: p.cible==='personne'?p.nom:({tous:'Tout le monde',etudiants:'Tous les étudiants',membres:'Tous les membres',commission:'Commission '+(p.commission||'')}[p.cible]||'Tout le monde'),
+      tel:'', titre:p.titre||'Rappel', texte:p.texte, date, heure, ts:Date.now(), lu:false, luPar:[], cible:p.cible||'tous', commission:p.commission||'', type:'programme', _u:Date.now()};
+    DB.messages.push(m);
+    diffuserMessage(m);
+  });
+  if(change){ persist(); toAll('maj',{}); }
+}, 30000);
+
+function lireCorps(req, max){ return new Promise((ok,ko)=>{ const ch=[]; let n=0; req.on('data',c=>{ n+=c.length; if(n>max){ ko(new Error('trop gros')); req.destroy(); } else ch.push(c); }); req.on('end',()=>{ try{ ok(JSON.parse(Buffer.concat(ch).toString('utf8')||'{}')); }catch(e){ ko(e); } }); }); }
+
 const server = http.createServer((req, res) => {
   const urlPath0 = req.url.split('?')[0];
+
+  // ---- Flux temps réel ----
+  if(urlPath0 === '/api/stream'){
+    res.writeHead(200, {'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+    res.write('retry: 3000\n\n');
+    streams.add(res);
+    req.on('close', ()=>streams.delete(res));
+    return;
+  }
+  // ---- Notifications push ----
+  if(urlPath0 === '/api/push/cle'){ sendJSON(res,200,{publicKey:PUSH.vapid.publicKey}); return; }
+  if(urlPath0 === '/api/push/stats'){
+    const parNom={}; PUSH.abonnements.forEach(a=>{ parNom[a.nom]=(parNom[a.nom]||0)+1; });
+    sendJSON(res,200,{total:PUSH.abonnements.length, enLigne:streams.size, parNom}); return;
+  }
+  if((urlPath0 === '/api/push/abonner' || urlPath0 === '/api/push/desabonner') && req.method==='POST'){
+    lireCorps(req, 20000).then(b=>{
+      if(urlPath0.endsWith('desabonner')){ PUSH.abonnements=PUSH.abonnements.filter(a=>a.endpoint!==b.endpoint); savePush(); sendJSON(res,200,{ok:true}); return; }
+      const s=b.subscription||{};
+      if(!b.nom || !s.endpoint || !s.keys || !s.keys.p256dh || !s.keys.auth){ sendJSON(res,400,{ok:false,error:'Abonnement invalide'}); return; }
+      PUSH.abonnements=PUSH.abonnements.filter(a=>a.endpoint!==s.endpoint);   // pas de doublon d'abonnement
+      PUSH.abonnements.push({nom:String(b.nom).slice(0,120), endpoint:s.endpoint, keys:{p256dh:s.keys.p256dh, auth:s.keys.auth}, at:new Date().toISOString()});
+      savePush(); sendJSON(res,200,{ok:true});
+    }).catch(()=>sendJSON(res,400,{ok:false}));
+    return;
+  }
 
   if(urlPath0 === '/api/data'){
     if(req.method === 'GET'){ sendJSON(res,200, DB ? JSON.stringify(DB) : 'null'); return; }
@@ -117,9 +270,12 @@ const server = http.createServer((req, res) => {
         if(aborted) return;
         let inc;
         try{ inc=JSON.parse(Buffer.concat(chunks).toString('utf8')); }catch(e){ sendJSON(res,400,{ok:false,error:'JSON invalide'}); return; }
+        const avant = DB, avantTxt = DB ? JSON.stringify(DB) : '';
         DB = merge(DB, inc);
         persist();
-        sendJSON(res,200, JSON.stringify(DB));
+        const txt = JSON.stringify(DB);
+        sendJSON(res,200, txt);
+        if(txt !== avantTxt){ try{ analyserNouveautes(avant||{}, DB); }catch(e){ console.error(e); } toAll('maj', {}); }
       });
       return;
     }
@@ -134,7 +290,7 @@ const server = http.createServer((req, res) => {
   try{ filePath = path.normalize(path.join(ROOT, decodeURIComponent(urlPath))); }catch(e){ res.writeHead(400); res.end('Requête invalide'); return; }
   if(!filePath.startsWith(ROOT + path.sep)){ res.writeHead(403); res.end('Interdit'); return; }
   const base=path.basename(filePath);
-  if(base==='data.json' || filePath.startsWith(BACKUP_DIR)){ res.writeHead(403); res.end('Interdit'); return; }
+  if(base==='data.json' || base==='push.json' || base.endsWith('.tmp') || filePath.startsWith(BACKUP_DIR)){ res.writeHead(403); res.end('Interdit'); return; }
 
   fs.readFile(filePath, (err, content) => {
     if(err){ res.writeHead(404, {'Content-Type':'text/plain; charset=utf-8'}); res.end('Fichier non trouvé : ' + urlPath); return; }
@@ -156,6 +312,7 @@ server.on('error', e=>{
   process.exit(1);
 });
 
+loadPush();
 server.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('=================================================');

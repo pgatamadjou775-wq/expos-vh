@@ -8,19 +8,72 @@
    ============================================================ */
 
 const ADMIN_CODE = '2026';   // code administrateur par défaut (modifiable dans Administration → Configuration)
-const RETARD_JOURS = 7;      // seuil "en retard" si non corrigé après ce délai
-const SEUIL_COMMISSION_FAIBLE = 50; // % en dessous duquel on alerte sur le taux de dépôt d'une commission
-const SEUIL_ABSENCES_DIMANCHE = 3;  // nombre de dimanches sans pointage avant alerte
-const SEUIL_REPRISE_JOURS = 14;     // délai avant d'alerter qu'une classe n'a pas eu son 1er passage
+// Seuils d'alerte : valeurs par défaut, remplacées par Administration → Configuration → Personnalisation
+let RETARD_JOURS = 7;             // "en retard" si non corrigé après ce délai
+let SEUIL_COMMISSION_FAIBLE = 50; // % en dessous duquel on alerte sur le taux d'une commission
+let SEUIL_ABSENCES_DIMANCHE = 3;  // nombre de dimanches sans pointage avant alerte
+let SEUIL_REPRISE_JOURS = 14;     // délai avant d'alerter qu'une classe n'a pas eu son 1er passage
 
 const LS_KEY = 'CE_DB_v1';
-const NIVEAU_OPTIONS = ['Très faible','Faible','Moyen','Très bien'];
+let NIVEAU_OPTIONS = ['Très faible','Faible','Moyen','Très bien'];
+const PHASE_DEFINITIVE = 'Dépôt définitif';
+
+/* ================= PERSONNALISATION (tout est modifiable dans l'administration) ================= */
+const REGLAGES_DEFAUT = {
+  classes:['Classe 1','Classe 2','Classe 3'],
+  phasesExpose:['1ère correction','Deuxième correction','Dépôt définitif'],
+  phasesRapport:['1ère correction','Deuxième correction','Dépôt définitif'],
+  niveaux:['Très faible','Faible','Moyen','Très bien'],
+  typesSource:['Livre','Document','Lien'],
+  seuils:{retard:7, commissionFaible:50, absencesDimanche:3, reprise:14},
+  accueil:{badge:"Académie Vases d'Honneur", titre1:'BIENVENUE À LA', titre2:'COMMISSION EXPOSÉ', suiviTitre1:'SUIVI DE MES', suiviTitre2:'EXPOSÉS & RAPPORTS'},
+  // Modèles des messages automatiques — variables : {nom} {numero} {type} {date} {heure} {remarques} {classe} {salle} {lieu} {poste}
+  modeles:{
+    depotExpose:'Bonjour {nom}, votre exposé n° {numero} a été reçu le {date} à {heure} et sera bientôt corrigé.',
+    depotRapport:'Bonjour {nom}, votre rapport de stage n° {numero} a été reçu le {date} à {heure} et sera bientôt corrigé.',
+    depotDefinitif:'Bonjour {nom}, votre rapport de stage DÉFINITIF n° {numero} a été reçu le {date} à {heure}. Il est enregistré comme définitif.',
+    enCorrection:'Votre {type} n° {numero} est en cours de correction.',
+    correctionTerminee:'Votre correction est terminée pour le {type} n° {numero}. Veuillez passer à la commission récupérer le document.{remarques}',
+    retrait:'Retrait confirmé pour le {type} n° {numero}. Merci.',
+    seancePresentateur:'Vous êtes programmé(e) pour présenter la méthodologie des exposés en {classe}, le {date} — Salle {salle}.',
+    seanceModerateur:'Un 1er passage de présentation de la méthodologie est programmé pour {classe} le {date} — Salle {salle}.',
+    sortie:'Vous êtes programmé(e) pour la sortie du {date} à {lieu}, en tant que {poste}.'
+  },
+  nonDoublons:[]   // paires marquées « ce ne sont pas des doublons »
+};
+const MODELES_LBL = {
+  depotExpose:'Exposé reçu', depotRapport:'Rapport de stage reçu', depotDefinitif:'Rapport définitif reçu',
+  enCorrection:'Document pris en correction', correctionTerminee:'Correction terminée', retrait:'Retrait confirmé',
+  seancePresentateur:'Séance : présentateur programmé', seanceModerateur:'Séance : modérateur informé', sortie:'Sortie : personne programmée'
+};
+function reglages(){ return (typeof DB!=='undefined' && DB && DB.reglages) || REGLAGES_DEFAUT; }
+function applyReglages(){
+  const r=reglages(), sd=r.seuils||{};
+  RETARD_JOURS = Number(sd.retard)||7;
+  SEUIL_COMMISSION_FAIBLE = Number(sd.commissionFaible)||50;
+  SEUIL_ABSENCES_DIMANCHE = Number(sd.absencesDimanche)||3;
+  SEUIL_REPRISE_JOURS = Number(sd.reprise)||14;
+  NIVEAU_OPTIONS = (r.niveaux&&r.niveaux.length)?r.niveaux:REGLAGES_DEFAUT.niveaux;
+}
+function modele(cle, vars){
+  const t = (reglages().modeles||{})[cle] || REGLAGES_DEFAUT.modeles[cle] || '';
+  return t.replace(/\{(\w+)\}/g, (m,k)=> vars && vars[k]!==undefined && vars[k]!==null ? String(vars[k]) : '');
+}
+// Remplit une liste déroulante sans doublons, en conservant le choix en cours
+function fillSelect(id, list, opts){
+  const sel=typeof id==='string'?document.getElementById(id):id; if(!sel) return;
+  opts=opts||{};
+  const v=sel.value;
+  const items=uniq(list||[]);
+  sel.innerHTML=(opts.vide?`<option value="">${escapeHtml(opts.vide)}</option>`:'')+items.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+  if(v && items.includes(v)) sel.value=v;
+}
 
 /* ================= DONNÉES OFFICIELLES — Étudiants par commission =================
    Source : Etudiants_par_commission_2.docx (115 lignes, 16 commissions).
    Le responsable de commission est rattaché à chaque étudiant.
    Pour une commission rattachée à une église fille, le responsable est « Église fille ». */
-const DATA_VERSION = 4;
+const DATA_VERSION = 5;
 const OFFICIEL_COMMISSIONS = [
   {"id": "cm-01", "nom": "Logistique", "responsable": "TRAORE Charles", "totalAttendu": 16},
   {"id": "cm-02", "nom": "Cours", "responsable": "Mme OUALLE", "totalAttendu": 20},
@@ -248,11 +301,35 @@ function seedDB(){
 /* Intègre la liste officielle (étudiants, commissions, responsables, rapports définitifs)
    dans une base existante, sans rien effacer d'autre. Retourne true si la base a changé. */
 function normName(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+/* ================= DOUBLONS ================= */
+// Clé de comparaison d'un nom : sans accents, majuscules, titres (Mme, M., Dr…) ni ponctuation
+function cleNom(s){ return normName(s).replace(/[.,;:'’"()\-]/g,' ').replace(/\b(mme|mlle|mr|m|dr|pasteur|pst|frere|soeur)\b/g,' ').replace(/\s+/g,' ').trim(); }
+// Liste sans doublons (comparaison sans accents / majuscules / espaces)
+function uniq(list, keyFn){
+  keyFn=keyFn||(x=>normName(x)); const vu=new Set();
+  return (list||[]).filter(x=>{ const k=keyFn(x); if(!k || vu.has(k)) return false; vu.add(k); return true; });
+}
+function existeDeja(list, valeur, keyFn){ keyFn=keyFn||(x=>normName(x)); const k=keyFn(valeur); return (list||[]).some(x=>keyFn(x)===k); }
+// Doublons probables : même nom, ou au moins 2 mots en commun (hors petits mots)
+function doublonsProbables(list){
+  const mots = n => new Set(cleNom(n).split(' ').filter(w=>w.length>=3 && !['nee','epse','epouse','de','des','les'].includes(w)));
+  const ignores=new Set((reglages().nonDoublons||[]));
+  const out=[];
+  for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){
+    const a=list[i], b=list[j];
+    const cle=[a.id,b.id].sort().join('|'); if(ignores.has(cle)) continue;
+    let same = cleNom(a.nom)===cleNom(b.nom);
+    if(!same){ const A=mots(a.nom), B=mots(b.nom); let c=0; A.forEach(w=>{ if(B.has(w)) c++; }); same = c>=2; }
+    if(same) out.push([a,b]);
+  }
+  return out;
+}
 function ensureOfficialData(db){
   if(!db || (db.dataVersion||0) >= DATA_VERSION) return false;
   if((db.dataVersion||0) < 2) ensureListeV2(db);
   if((db.dataVersion||0) < 3) ensureMembresV3(db);
   if((db.dataVersion||0) < 4) ensureMembresV4(db);
+  if((db.dataVersion||0) < 5){ dedoublonnerV5(db); if(db.reglages) db.reglages.version=5; }   // la marque force l'enregistrement des réglages sur le serveur
   db.dataVersion = DATA_VERSION;
   return true;
 }
@@ -281,6 +358,37 @@ function ensureMembresV4(db){
     const o=OFFICIEL_MEMBRES.find(x=>x.id===m.id);
     if(o){ if(o.tel && !m.tel) m.tel=o.tel; if(o.eglise && !m.eglise) m.eglise=o.eglise; if(o.situation && !m.motifAbsence) m.motifAbsence=o.situation; }
   });
+}
+/* v5 : suppression des doublons déjà présents dans les listes */
+function dedoublonnerV5(db){
+  if(!db.tombstones) db.tombstones={};
+  const vus=new Map();
+  (db.etudiants||[]).slice().forEach(e=>{
+    const k=cleNom(e.nom);
+    if(!vus.has(k)){ vus.set(k,e); return; }
+    const garde=vus.get(k);
+    // la fiche en double disparaît, ses dépôts sont rattachés à la fiche conservée
+    (db.rapports||[]).concat(db.expositions||[]).forEach(r=>{ if(r.etudiantId===e.id || cleNom(r.etudiantNom)===k){ r.etudiantId=garde.id; r.etudiantNom=garde.nom; } });
+    db.tombstones[e.id]=1; db.tombstones['rd-'+e.id]=1;
+    db.etudiants=db.etudiants.filter(x=>x!==e);
+    db.rapports=(db.rapports||[]).filter(r=>r.id!=='rd-'+e.id);
+  });
+  // un seul rapport définitif par étudiant
+  const defs=new Map();
+  (db.rapports||[]).slice().forEach(r=>{
+    if(r.statut!=='definitif') return;
+    const k=cleNom(r.etudiantNom);
+    if(!defs.has(k)){ defs.set(k,r); return; }
+    const garde=defs.get(k), jete = r.source==='liste officielle' ? r : (garde.source==='liste officielle' ? garde : r);
+    if(jete===garde) defs.set(k,r);
+    db.tombstones[jete.id]=1; db.rapports=db.rapports.filter(x=>x!==jete);
+  });
+  const vm=new Set();
+  (db.membres||[]).slice().forEach(m=>{ const k=cleNom(m.nom); if(vm.has(k)){ db.tombstones[m.id]=1; db.membres=db.membres.filter(x=>x!==m); } else vm.add(k); });
+  db.eglises=uniq(db.eglises||[]); db.motifsPresence=uniq(db.motifsPresence||[]);
+  const vc=new Set(); db.commissions=(db.commissions||[]).filter(c=>{ const k=normName(c.nom); if(vc.has(k)) return false; vc.add(k); return true; });
+  const vb=new Set();
+  (db.bibliotheque||[]).slice().forEach(b=>{ const k=b.classe+'|'+normName(b.titre); if(vb.has(k)){ db.tombstones[b.id]=1; db.bibliotheque=db.bibliotheque.filter(x=>x!==b); } else vb.add(k); });
 }
 /* v2 : liste officielle des étudiants, commissions, responsables et rapports définitifs */
 function ensureListeV2(db){
@@ -336,9 +444,9 @@ function commissionResponsable(nomCommission){ const c=(DB.commissions||[]).find
    qui les FUSIONNE fiche par fiche : la tablette, le PC et les téléphones peuvent enregistrer
    en même temps sans s'écraser. Sans serveur : mode hors-ligne sur un seul appareil. */
 // Collections fusionnées fiche par fiche (par id)
-const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages'];
+const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes'];
 // Paramètres fusionnés en bloc (la modification la plus récente gagne)
-const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode'];
+const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode','reglages'];
 
 function applyDefaults(DB){
   RECORD_COLLECTIONS.forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
@@ -349,6 +457,14 @@ function applyDefaults(DB){
   if(!DB.motifsPresence || !DB.motifsPresence.length) DB.motifsPresence = seedDB().motifsPresence;
   if(!DB.tombstones) DB.tombstones = {};
   if(!DB.adminCode) DB.adminCode = ADMIN_CODE;
+  // réglages personnalisables : on complète ce qui manque avec les valeurs par défaut
+  const R0=JSON.parse(JSON.stringify(REGLAGES_DEFAUT));
+  if(!DB.reglages || typeof DB.reglages!=='object') DB.reglages=R0;
+  Object.keys(R0).forEach(k=>{
+    if(DB.reglages[k]===undefined) DB.reglages[k]=R0[k];
+    else if(R0[k] && typeof R0[k]==='object' && !Array.isArray(R0[k])) Object.keys(R0[k]).forEach(k2=>{ if(DB.reglages[k][k2]===undefined) DB.reglages[k][k2]=R0[k][k2]; });
+  });
+  ['phasesExpose','phasesRapport'].forEach(k=>{ if(!DB.reglages[k].includes(PHASE_DEFINITIVE)) DB.reglages[k].push(PHASE_DEFINITIVE); });
   if(!DB._cfgU) DB._cfgU = 1;
   DB.membres.forEach(m=>{
     if(m.lieu===undefined) m.lieu='';
@@ -399,7 +515,7 @@ function loadDB(){
   let parsed=null;
   try{ const raw=localStorage.getItem(LS_KEY); parsed = raw ? JSON.parse(raw) : null; }catch(e){ parsed=null; }
   DB = parsed || seedDB();
-  applyDefaults(DB);
+  applyDefaults(DB); applyReglages();
   takeSnapshot();
   const changed = ensureOfficialData(DB);
   // appareil neuf : on lit d'abord le serveur avant d'envoyer quoi que ce soit
@@ -416,7 +532,7 @@ function saveDB(){
 }
 function adoptRemote(remote){
   DB=remote;
-  applyDefaults(DB);
+  applyDefaults(DB); applyReglages();
   takeSnapshot();
   const changed=ensureOfficialData(DB);
   if(changed){ stampChanges(); DIRTY=true; }   // base ancienne version : la mise à jour est renvoyée au serveur
@@ -517,18 +633,48 @@ function downloadBytes(bytes, fileName, mime){
 }
 const MOIS_LBL=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
+// Les niveaux sont personnalisables : les premiers de la liste déclenchent une alerte
 function niveauBadgeClass(niveau){
-  if(niveau==='Très faible') return 'br';
-  if(niveau==='Faible') return 'by';
-  if(niveau==='Très bien') return 'bg';
-  return 'bn';
+  const i=NIVEAU_OPTIONS.indexOf(niveau), n=NIVEAU_OPTIONS.length;
+  if(i===0) return 'br'; if(i===1 && n>2) return 'by'; if(i===n-1) return 'bg'; return 'bn';
 }
-function niveauAlerte(niveau){ return niveau==='Très faible' || niveau==='Faible'; }
+function niveauAlerte(niveau){ const i=NIVEAU_OPTIONS.indexOf(niveau); return i>=0 && i < Math.max(1, Math.floor(NIVEAU_OPTIONS.length/2)); }
 
-function sendMessage(nom, texte, tel){
-  if(!nom) return;
-  DB.messages.push({id:nid(), nom, tel:tel||'', texte, date:todayStr(), heure:nowTimeStr(), lu:false});
+/* ================= MESSAGES & NOTIFICATIONS =================
+   Un message est soit personnel (cible « personne »), soit une annonce à un groupe :
+   « tous », « etudiants », « membres » ou « commission » (une commission précise).
+   Le serveur prévient en direct les écrans ouverts et envoie une notification push
+   aux téléphones abonnés (voir server.js). */
+function sendMessage(nom, texte, tel, extra){
+  if(!nom || !texte) return null;
+  extra=extra||{};
+  const date=todayStr();
+  // pas deux fois le même message à la même personne le même jour
+  if(DB.messages.some(m=>(!m.cible||m.cible==='personne') && normName(m.nom)===normName(nom) && m.texte===texte && m.date===date)) return null;
+  const m={id:nid(), nom, tel:tel||'', titre:extra.titre||'Commission Exposé', texte, date, heure:nowTimeStr(), ts:Date.now(), lu:false, cible:'personne', type:extra.type||'info'};
+  DB.messages.push(m);
+  return m;
 }
+function sendAnnonce(cible, texte, titre, commission, auteur){
+  const lbl = {tous:'Tout le monde', etudiants:'Tous les étudiants', membres:'Tous les membres', commission:'Commission '+(commission||'')}[cible]||'Tout le monde';
+  const m={id:nid(), nom:lbl, tel:'', titre:titre||'Annonce', texte, date:todayStr(), heure:nowTimeStr(), ts:Date.now(), lu:false, luPar:[], cible, commission:commission||'', type:'annonce', auteur:auteur||''};
+  DB.messages.push(m);
+  return m;
+}
+// Ce message concerne-t-il cette personne ?
+function messageConcerne(m, nom){
+  const n=normName(nom); if(!n) return false;
+  if(!m.cible || m.cible==='personne') return normName(m.nom)===n;
+  if(m.cible==='tous') return true;
+  const etu=(DB.etudiants||[]).find(e=>normName(e.nom)===n);
+  const mem=(DB.membres||[]).find(x=>normName(x.nom)===n);
+  if(m.cible==='etudiants') return !!etu;
+  if(m.cible==='membres') return !!mem;
+  if(m.cible==='commission') return !!(etu && etu.commission===m.commission);
+  return false;
+}
+function messageLu(m, nom){ return (!m.cible||m.cible==='personne') ? !!m.lu : (m.luPar||[]).includes(normName(nom)); }
+function marquerLu(m, nom){ if(!m.cible||m.cible==='personne') m.lu=true; else { m.luPar=m.luPar||[]; const n=normName(nom); if(!m.luPar.includes(n)) m.luPar.push(n); } }
 // Construit un lien wa.me pré-rempli (nom + message) pour envoyer en un clic via WhatsApp.
 // Retourne '' si aucun numéro n'est disponible (le bouton ne doit alors pas s'afficher).
 function waLink(tel, texte){
@@ -547,7 +693,73 @@ function toast(msg,type){
   window._tst=setTimeout(()=>{ t.className='toast '+(type||'ok'); },2400);
 }
 
+/* ================= TEMPS RÉEL (comme le modèle « resto ») =================
+   Le serveur garde une connexion ouverte avec chaque écran (Server-Sent Events) :
+   - « maj »      : les données ont changé → l'écran se met à jour tout de suite
+   - « notif »    : un nouveau message vient d'être envoyé
+   - « activite » : un dépôt / un pointage vient d'être fait (alerte à l'administration) */
+let ES=null;
+function connectStream(){
+  if(!window.EventSource || location.protocol==='file:') return;
+  try{ ES=new EventSource('/api/stream'); }catch(e){ return; }
+  ES.onopen=()=>{ SERVER_CONNECTE=true; updateSyncBadge(); };
+  ES.addEventListener('maj', ()=>{ syncNow(); });
+  ES.addEventListener('notif', e=>{ try{ const m=JSON.parse(e.data); if(typeof window.onNotif==='function') window.onNotif(m); }catch(x){} });
+  ES.addEventListener('activite', e=>{ try{ const a=JSON.parse(e.data); if(typeof window.onActivite==='function') window.onActivite(a); }catch(x){} });
+}
+// Son + vibration (comme le modèle)
+let AUDIO_CTX=null;
+document.addEventListener('click', ()=>{ if(!AUDIO_CTX) try{ AUDIO_CTX=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }, {once:true});
+function ding(fort){
+  try{
+    AUDIO_CTX=AUDIO_CTX||new (window.AudioContext||window.webkitAudioContext)();
+    const notes = fort ? [880,1175,880,1175] : [784,1046];
+    notes.forEach((f,i)=>{ const o=AUDIO_CTX.createOscillator(), g=AUDIO_CTX.createGain(); const t=AUDIO_CTX.currentTime+i*.17; o.type='triangle'; o.frequency.value=f; g.gain.setValueAtTime(.22,t); g.gain.exponentialRampToValueAtTime(.001,t+.3); o.connect(g); g.connect(AUDIO_CTX.destination); o.start(t); o.stop(t+.32); });
+    if(navigator.vibrate) navigator.vibrate([120,60,120]);
+  }catch(e){}
+}
+// Bandeau de notification en haut de l'écran (cliquable)
+function bandeau(titre, texte, onClick){
+  let el=document.getElementById('notif-bandeau');
+  if(!el){ el=document.createElement('div'); el.id='notif-bandeau'; el.className='notif-bandeau'; el.innerHTML='<div class="nb-t"></div><div class="nb-b"></div>'; document.body.appendChild(el); }
+  el.querySelector('.nb-t').textContent=titre||'Notification';
+  el.querySelector('.nb-b').textContent=texte||'';
+  el.classList.add('on');
+  el.onclick=()=>{ el.classList.remove('on'); if(onClick) onClick(); };
+  clearTimeout(window._nbT); window._nbT=setTimeout(()=>el.classList.remove('on'),7000);
+}
+// Notification système (bureau / téléphone) quand l'onglet n'est pas au premier plan
+function notifSysteme(titre, texte){
+  try{
+    if(!('Notification' in window) || Notification.permission!=='granted' || !document.hidden) return;
+    navigator.serviceWorker && navigator.serviceWorker.getRegistration ? navigator.serviceWorker.getRegistration().then(reg=>{ if(reg) reg.showNotification(titre,{body:texte,tag:'ce-'+Date.now()}); else new Notification(titre,{body:texte}); }).catch(()=>{ new Notification(titre,{body:texte}); }) : new Notification(titre,{body:texte});
+  }catch(e){}
+}
+/* ---------- Notifications push (téléphone verrouillé / application fermée) ----------
+   Comme dans le modèle : il faut que l'application soit ouverte en HTTPS (serveur en ligne)
+   ou sur « localhost ». Sur le Wi-Fi local en http, le bandeau + son fonctionnent quand l'app est ouverte. */
+const pushDisponible = () => ('serviceWorker' in navigator) && ('PushManager' in window) && window.isSecureContext;
+function b64ToU8(s){ const p='='.repeat((4-s.length%4)%4); const b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from([...b].map(c=>c.charCodeAt(0))); }
+async function activerPush(nom){
+  if(!pushDisponible()) throw new Error("Ce téléphone n'accepte les notifications que si l'application est ouverte en HTTPS (serveur en ligne). Gardez l'application ouverte : vous serez quand même prévenu.");
+  let perm=Notification.permission;
+  if(perm==='default') perm=await Notification.requestPermission();
+  if(perm!=='granted') throw new Error('Notifications refusées : réactivez-les dans les réglages du navigateur.');
+  const reg=await navigator.serviceWorker.register('sw.js'); await navigator.serviceWorker.ready;
+  const cle=await (await fetch('/api/push/cle')).json();
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(cle.publicKey)});
+  const r=await fetch('/api/push/abonner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nom, subscription:sub.toJSON()})});
+  if(!r.ok) throw new Error("Le serveur n'a pas accepté l'abonnement.");
+  return true;
+}
+async function desactiverPush(){
+  try{ const reg=await navigator.serviceWorker.getRegistration(); const sub=reg && await reg.pushManager.getSubscription();
+    if(sub){ await fetch('/api/push/desabonner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}); await sub.unsubscribe(); } }catch(e){}
+}
+
 loadDB();
 LAST_RENDER_SIG=JSON.stringify(DB);
+connectStream();
 syncNow();
-setInterval(()=>syncNow(), 5000);
+setInterval(()=>syncNow(), 8000);   // filet de sécurité : le temps réel passe par connectStream()

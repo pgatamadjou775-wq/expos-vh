@@ -40,7 +40,7 @@ function getThemes(containerId){
 /* ================= LIEU DE DÉPÔT (liste des centres / églises + "Autre") ================= */
 function fillLieuSelect(prefix){
   const sel=document.getElementById(prefix+'-lieu');
-  sel.innerHTML = DB.eglises.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')
+  sel.innerHTML = uniq(DB.eglises).map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')
     + `<option value="__autre__">Autre (mon église/centre n'est pas dans la liste)</option>`;
 }
 function toggleLieuAutre(prefix){
@@ -109,7 +109,7 @@ function rpPhaseInfo(){
 function fillCommissionSelect(prefix){
   const sel=document.getElementById(prefix+'-commission');
   sel.innerHTML = DB.commissions.length
-    ? DB.commissions.map(c=>`<option value="${escapeHtml(c.nom)}">${escapeHtml(c.nom)}</option>`).join('')
+    ? uniq(DB.commissions, c=>normName(c.nom)).map(c=>`<option value="${escapeHtml(c.nom)}">${escapeHtml(c.nom)}</option>`).join('')
     : `<option value="">Aucune commission configurée</option>`;
 }
 
@@ -137,10 +137,16 @@ function removePhoto(key, gridId, i){
 }
 
 /* ================= NOTIFICATIONS (messages destinés à l'appli "Suivi") ================= */
-function notifyDoc(x, texte){
-  sendMessage(x.etudiantNom, texte, x.tel);
-  if(x.responsable && x.responsable.nom) sendMessage(x.responsable.nom, texte, x.responsable.tel);
-  if(x.mandataire && x.mandataire.nom) sendMessage(x.mandataire.nom, texte, x.mandataire.tel);
+// Message automatique à l'étudiant, au responsable et au mandataire (une seule fois par personne)
+function notifyDoc(x, cle, vars){
+  const type = x.numero && String(x.numero).startsWith('EXP') ? 'exposé' : 'rapport';
+  const v=Object.assign({nom:x.etudiantNom, numero:x.numero, type, date:frDate(x.dateDepot), heure:x.heureDepot||''}, vars||{});
+  const texte = modele(cle, v);
+  const titres={depotExpose:'Exposé reçu',depotRapport:'Rapport reçu',depotDefinitif:'Rapport définitif reçu',enCorrection:'En cours de correction',correctionTerminee:'Correction terminée',retrait:'Retrait confirmé'};
+  const dest=[[x.etudiantNom,x.tel]];
+  if(x.responsable && x.responsable.nom) dest.push([x.responsable.nom, x.responsable.tel]);
+  if(x.mandataire && x.mandataire.nom) dest.push([x.mandataire.nom, x.mandataire.tel]);
+  uniq(dest, d=>cleNom(d[0])).forEach(([nom,tel])=>sendMessage(nom, texte, tel, {titre:titres[cle]||'Commission Exposé', type:'document'}));
 }
 
 /* ================================================================
@@ -163,6 +169,7 @@ function prFilter(){
     : `<div class="empty"><p>Aucun membre trouvé</p></div>`;
 }
 function prSelect(id){
+  remplirListes();
   prSelMembre = DB.membres.find(m=>m.id===id);
   if(!prSelMembre) return;
   document.getElementById('pr-search').classList.add('hidden');
@@ -258,8 +265,13 @@ function confirmArrivee(){
 /* ================================================================
    MODULE 2 — DÉPÔT / RETRAIT DES EXPOSÉS
    ================================================================ */
+function remplirListes(){
+  const r=reglages();
+  fillSelect('ex-classe', r.classes); fillSelect('pr-classe', r.classes);
+  fillSelect('ex-phase', r.phasesExpose); fillSelect('rp-phase', r.phasesRapport);
+}
 function openExpose(){
-  goScreen('s-expose');
+  goScreen('s-expose'); remplirListes();
   photoStore.ex=[];
   document.getElementById('ex-nom').value=''; document.getElementById('ex-tel').value=''; document.getElementById('ex-moderateur').value='';
   document.getElementById('ex-nom-classe').value='';
@@ -309,7 +321,7 @@ function confirmDepotExpose(){
     dateDepot: todayStr(), heureDepot: nowTimeStr(), tsDepot: nowFull(), dateCorrection:'', dateRetrait:''
   };
   DB.expositions.push(rec);
-  notifyDoc(rec, `Votre exposé n° ${numero} a été reçu le ${rec.dateDepot} à ${rec.heureDepot} et sera bientôt corrigé.`);
+  notifyDoc(rec, 'depotExpose');
   saveDB();
   document.getElementById('ex-deposer').classList.add('hidden');
   document.getElementById('ex-success').classList.remove('hidden');
@@ -347,7 +359,7 @@ function openExRetraitDetail(id){
 function confirmRetraitExpose(id){
   const x=DB.expositions.find(e=>e.id===id); if(!x) return;
   x.statut='retire'; x.dateRetrait=todayStr();
-  notifyDoc(x, `Retrait confirmé pour l'exposé n° ${x.numero}. Merci.`);
+  notifyDoc(x, 'retrait');
   saveDB();
   document.getElementById('ex-retrait-detail').classList.add('hidden');
   document.getElementById('ex-success').classList.remove('hidden');
@@ -360,13 +372,13 @@ function confirmRetraitExpose(id){
    MODULE 3 — RAPPORT DE STAGE (pas de champ classe)
    ================================================================ */
 function openRapport(){
-  goScreen('s-rapport');
+  goScreen('s-rapport'); remplirListes();
   photoStore.rp=[];
   document.getElementById('rp-nom').value=''; document.getElementById('rp-tel').value='';
   document.getElementById('rp-resp-nom').value=''; document.getElementById('rp-resp-tel').value='';
   document.getElementById('rp-mand-nom').value=''; document.getElementById('rp-mand-tel').value='';
   document.getElementById('rp-nom-list').classList.add('hidden'); document.getElementById('rp-nom-info').textContent='';
-  document.getElementById('rp-phase').value='1ère correction'; rpPhaseInfo(); rpRespAuto='';
+  document.getElementById('rp-phase').selectedIndex=0; rpPhaseInfo(); rpRespAuto='';
   document.getElementById('rp-chk').checked=false; document.getElementById('rp-chk').disabled=true;
   resetLieu('rp'); fillCommissionSelect('rp'); rpCommissionChange();
   renderPhotoGrid('rp','rp-photos'); rpToggleChk();
@@ -429,9 +441,9 @@ function confirmDepotRapport(){
     DB.rapports.push(rec);
   }
   if(definitif){
-    notifyDoc(rec, `Votre rapport de stage DÉFINITIF n° ${rec.numero} a été reçu le ${rec.dateDepot} à ${rec.heureDepot}. Il est enregistré comme définitif.`);
+    notifyDoc(rec, 'depotDefinitif');
   } else {
-    notifyDoc(rec, `Votre rapport de stage n° ${rec.numero} a été reçu le ${rec.dateDepot} à ${rec.heureDepot} et sera bientôt corrigé.`);
+    notifyDoc(rec, 'depotRapport');
   }
   saveDB();
   document.getElementById('rp-deposer').classList.add('hidden');
@@ -470,7 +482,7 @@ function openRpRetraitDetail(id){
 function confirmRetraitRapport(id){
   const x=DB.rapports.find(e=>e.id===id); if(!x) return;
   x.statut='retire'; x.dateRetrait=todayStr();
-  notifyDoc(x, `Retrait confirmé pour le rapport n° ${x.numero}. Merci.`);
+  notifyDoc(x, 'retrait');
   saveDB();
   document.getElementById('rp-retrait-detail').classList.add('hidden');
   document.getElementById('rp-success').classList.remove('hidden');
@@ -543,7 +555,7 @@ function corPrendre(id){
   const x=corDB().find(d=>d.id===id); if(!x) return;
   if(x.statut!=='depose'){ toast('Ce document a déjà été pris par un autre correcteur','ko'); renderCorLists(); return; }
   x.statut='en_correction'; x.correcteur=corUser.nom; x.tsDebutCorrection=nowFull();
-  notifyDoc(x, `Votre ${corType==='expose'?'exposé':'rapport'} n° ${x.numero} est en cours de correction.`);
+  notifyDoc(x, 'enCorrection');
   saveDB(); renderCorLists(); toast('Document pris en correction','ok');
 }
 function corOpenFinaliser(id){
@@ -590,7 +602,7 @@ function corFinaliser(id){
   x.commentaire = document.getElementById('cor-comment').value.trim();
   x.dateCorrection = todayStr();
   const remarque = x.commentaire ? ` Remarques du correcteur : ${x.commentaire}` : '';
-  notifyDoc(x, `Votre correction est terminée pour le ${corType==='expose'?'exposé':'rapport'} n° ${x.numero}. Veuillez passer à la commission récupérer le document.${remarque}`);
+  notifyDoc(x, 'correctionTerminee', {remarques: x.commentaire ? ' Remarques du correcteur : '+x.commentaire : ''});
   saveDB();
   document.getElementById('cor-detail').classList.add('hidden');
   document.getElementById('cor-main').classList.remove('hidden');
@@ -600,9 +612,26 @@ function corFinaliser(id){
 
 /* ================= INIT ================= */
 tickClock(); setInterval(tickClock,1000);
+/* Textes d'accueil personnalisables */
+function appliquerAccueil(){
+  const a=reglages().accueil||{};
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el && v) el.textContent=v; };
+  set('acc-badge',a.badge); set('acc-t1',a.titre1); set('acc-t2',a.titre2);
+}
+appliquerAccueil(); remplirListes();
+/* Temps réel : l'Espace Correcteur est prévenu à chaque nouveau dépôt */
+window.onActivite = function(a){
+  if(!corUser || document.getElementById('cor-main').classList.contains('hidden')) return;
+  if(a.type!=='expose' && a.type!=='rapport') return;
+  if(a.type==='rapport' && (a.statut==='definitif' || a.phase===PHASE_DEFINITIVE)) return;
+  syncNow();   // la liste « Disponibles pour correction » se met à jour tout de suite
+  ding(true);
+  bandeau(a.type==='expose'?'Nouvel exposé à corriger':'Nouveau rapport à corriger', `${a.nom} — n° ${a.numero}`, ()=>corSwitch(a.type));
+};
 addThemeRow('ex-themes-list');
 
 window.onRemoteUpdate = function(){
+  appliquerAccueil();
   if(document.getElementById('s-presence').classList.contains('on') && !document.getElementById('pr-search').classList.contains('hidden')) prFilter();
   if(document.getElementById('s-expose').classList.contains('on') && !document.getElementById('ex-retirer').classList.contains('hidden')) renderExRetrait();
   if(document.getElementById('s-rapport').classList.contains('on') && !document.getElementById('rp-retirer').classList.contains('hidden')) renderRpRetrait();

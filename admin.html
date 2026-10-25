@@ -66,6 +66,7 @@
     <div class="scr-sub" style="margin-left:0;">Académie Vases d'Honneur — Commission Exposé (interface distincte du côté étudiant)</div>
     <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap;">
       <button class="btn-sm" style="background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">Actualiser depuis le serveur</button>
+      <button class="btn-sm hidden" id="ad-alertes-btn" style="background:var(--YEL);color:var(--REDD);" onclick="activerAlertesBureau()">Activer les alertes du bureau</button>
       <span class="sync-badge"></span>
     </div>
   </div>
@@ -89,6 +90,7 @@
         <button id="ad-tab-etudiants" onclick="adSwitch('etudiants')">Étudiants</button>
         <button id="ad-tab-config" onclick="adSwitch('config')">Configuration</button>
         <button id="ad-tab-seances" onclick="adSwitch('seances')">Séances &amp; Sorties</button>
+        <button id="ad-tab-notif" onclick="adSwitch('notif')">Notifications</button>
         <button id="ad-tab-export" onclick="adSwitch('export')">Exports Word / Excel</button>
       </div>
 
@@ -188,6 +190,7 @@
           </div>
           <button class="btn-sm btn-g" style="width:100%;" onclick="addEtudiant()">+ Ajouter l'étudiant</button>
         </div></div>
+        <div class="card" id="ads-doublons-card"><div class="card-h">Doublons possibles</div><div id="ads-doublons"></div></div>
         <div class="card"><div class="card-h">Étudiants par commission</div>
           <div class="filters" style="grid-template-columns:2fr 1fr;">
             <input type="text" id="ads-q" placeholder="Rechercher un nom..." oninput="renderAdEtudiants()">
@@ -198,7 +201,34 @@
 
       <!-- CONFIGURATION -->
       <div id="ad-config" class="hidden">
+        <div class="card"><div class="card-h">Personnalisation</div><div class="card-b">
+          <div class="hint" style="margin-bottom:10px;">Tout se modifie ici : les listes apparaissent aussitôt sur la tablette et les téléphones. Les doublons sont refusés automatiquement.</div>
+          <div class="sub-card"><h4>Textes d'accueil</h4>
+            <div class="fg-row">
+              <div class="fg"><label>Bandeau</label><input class="inline-in" style="width:100%" type="text" id="rg-badge" onchange="rgTexte('badge',this.value)"></div>
+              <div class="fg"><label>Accueil — ligne 1</label><input class="inline-in" style="width:100%" type="text" id="rg-titre1" onchange="rgTexte('titre1',this.value)"></div>
+            </div>
+            <div class="fg-row">
+              <div class="fg"><label>Accueil — ligne 2</label><input class="inline-in" style="width:100%" type="text" id="rg-titre2" onchange="rgTexte('titre2',this.value)"></div>
+              <div class="fg"><label>Suivi — ligne 1</label><input class="inline-in" style="width:100%" type="text" id="rg-suiviTitre1" onchange="rgTexte('suiviTitre1',this.value)"></div>
+            </div>
+            <div class="fg"><label>Suivi — ligne 2</label><input class="inline-in" style="width:100%" type="text" id="rg-suiviTitre2" onchange="rgTexte('suiviTitre2',this.value)"></div>
+          </div>
+          <div class="sub-card"><h4>Listes</h4><div id="rg-listes"></div></div>
+          <div class="sub-card"><h4>Seuils d'alerte</h4>
+            <div class="fg-row">
+              <div class="fg"><label>Document en retard après (jours)</label><input class="inline-in" style="width:100%" type="number" min="1" id="rg-retard" onchange="rgSeuil('retard',this.value)"></div>
+              <div class="fg"><label>Taux faible d'une commission (%)</label><input class="inline-in" style="width:100%" type="number" min="1" max="100" id="rg-commissionFaible" onchange="rgSeuil('commissionFaible',this.value)"></div>
+            </div>
+            <div class="fg-row">
+              <div class="fg"><label>Dimanches d'absence avant alerte</label><input class="inline-in" style="width:100%" type="number" min="1" id="rg-absencesDimanche" onchange="rgSeuil('absencesDimanche',this.value)"></div>
+              <div class="fg"><label>Jours sans méthodologie après la rentrée</label><input class="inline-in" style="width:100%" type="number" min="1" id="rg-reprise" onchange="rgSeuil('reprise',this.value)"></div>
+            </div>
+          </div>
+        </div></div>
+
         <div class="card"><div class="card-h">Membres de la commission exposé</div><div class="card-b">
+          <div id="ad-mb-doublons"></div>
           <div id="ad-mb-list"></div>
           <div class="fg-row" style="margin-top:10px;">
             <input type="text" id="ad-mb-new-nom" placeholder="Nom complet...">
@@ -235,8 +265,8 @@
           <div class="sub-card">
             <h4>Ajouter une source</h4>
             <div class="fg-row">
-              <select id="bib-new-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
-              <select id="bib-new-type"><option value="Livre">Livre</option><option value="Document">Document</option><option value="Lien">Lien</option></select>
+              <select id="bib-new-classe"></select>
+              <select id="bib-new-type"></select>
             </div>
             <div class="fg-row" style="margin-top:8px;">
               <input type="text" id="bib-new-titre" placeholder="Titre">
@@ -252,7 +282,7 @@
           <div id="ad-med-list"></div>
           <div class="sub-card">
             <div class="fg-row">
-              <select id="med-new-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
+              <select id="med-new-classe"></select>
               <input type="date" id="med-new-date">
             </div>
             <input type="text" id="med-new-livre" placeholder="Livre / passage médité" style="margin-top:8px;width:100%;padding:12px;border:1.5px solid var(--LINE);border-radius:10px;">
@@ -262,7 +292,7 @@
           <div id="ad-quiz-list"></div>
           <div class="sub-card">
             <div class="fg-row">
-              <select id="quiz-new-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
+              <select id="quiz-new-classe"></select>
               <input type="date" id="quiz-new-date">
             </div>
             <input type="text" id="quiz-new-livre" placeholder="Référence livre déjà médité" style="margin-top:8px;width:100%;padding:12px;border:1.5px solid var(--LINE);border-radius:10px;">
@@ -284,7 +314,7 @@
         <div class="card"><div class="card-h">Signaler une reprise de classe</div><div class="card-b">
           <div class="fg-row">
             <div class="fg"><label>Classe</label>
-              <select id="se-classe"><option value="Classe 1">Classe 1</option><option value="Classe 2">Classe 2</option><option value="Classe 3">Classe 3</option></select>
+              <select id="se-classe"></select>
             </div>
             <div class="fg"><label>Date de reprise</label><input type="date" id="se-date-reprise"></div>
           </div>
@@ -328,6 +358,61 @@
           <button class="btn btn-y" onclick="addSortie()">Programmer la sortie</button>
         </div></div>
         <div class="card"><div class="card-h">Sorties programmées</div><div class="card-b" id="ad-so-list"></div></div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div id="ad-notif" class="hidden">
+        <div class="dash-kpis" id="nt-kpis"></div>
+        <div class="card"><div class="card-h">Envoyer un message maintenant</div><div class="card-b">
+          <div class="fg-row">
+            <div class="fg"><label>Destinataire</label>
+              <select id="nt-cible" onchange="ntCibleChange('nt')">
+                <option value="personne">Une personne</option><option value="tous">Tout le monde</option>
+                <option value="etudiants">Tous les étudiants</option><option value="membres">Tous les membres de la commission</option>
+                <option value="commission">Une commission</option>
+              </select></div>
+            <div class="fg" id="nt-nom-wrap"><label>Nom</label><input type="text" id="nt-nom" list="nt-personnes" placeholder="Tapez un nom..."></div>
+            <div class="fg hidden" id="nt-com-wrap"><label>Commission</label><select id="nt-com"></select></div>
+          </div>
+          <div class="fg"><label>Titre</label><input type="text" id="nt-titre" placeholder="Ex : Rappel, Annonce, Information..."></div>
+          <div class="fg"><label>Message</label><textarea id="nt-texte" rows="3" placeholder="Votre message..."></textarea></div>
+          <button class="btn btn-g" onclick="ntEnvoyer()">Envoyer</button>
+          <div class="hint" style="margin-top:8px;">Les écrans ouverts sont prévenus tout de suite (bandeau + son). Les téléphones abonnés reçoivent une notification même verrouillés (serveur en HTTPS).</div>
+          <datalist id="nt-personnes"></datalist>
+        </div></div>
+
+        <div class="card"><div class="card-h">Messages programmés (envoi automatique)</div><div class="card-b">
+          <div id="pg-list"></div>
+          <div class="sub-card" style="margin-top:10px;">
+            <h4>Nouveau message programmé</h4>
+            <div class="fg-row">
+              <div class="fg"><label>Destinataire</label>
+                <select id="pg-cible" onchange="ntCibleChange('pg')">
+                  <option value="tous">Tout le monde</option><option value="etudiants">Tous les étudiants</option>
+                  <option value="membres">Tous les membres de la commission</option><option value="commission">Une commission</option><option value="personne">Une personne</option>
+                </select></div>
+              <div class="fg hidden" id="pg-nom-wrap"><label>Nom</label><input type="text" id="pg-nom" list="nt-personnes"></div>
+              <div class="fg hidden" id="pg-com-wrap"><label>Commission</label><select id="pg-com"></select></div>
+            </div>
+            <div class="fg"><label>Titre</label><input type="text" id="pg-titre" placeholder="Ex : Rappel du samedi"></div>
+            <div class="fg"><label>Message</label><textarea id="pg-texte" rows="2" placeholder="Ex : La commission exposé vous attend ce samedi de 7 h à 15 h."></textarea></div>
+            <div class="fg"><label>Jours d'envoi</label><div class="mini-pills" id="pg-jours"></div></div>
+            <div class="fg"><label>Heure</label><input type="time" id="pg-heure" value="08:00"></div>
+            <button class="btn-sm btn-g" style="width:100%;" onclick="pgAjouter()">Programmer</button>
+          </div>
+        </div></div>
+
+        <div class="card"><div class="card-h">Historique des messages</div>
+          <div class="filters" style="grid-template-columns:2fr 1fr;">
+            <input type="text" id="nt-q" placeholder="Rechercher un nom ou un mot..." oninput="renderHistorique()">
+            <select id="nt-fl" onchange="renderHistorique()"><option value="">Tous les messages</option><option value="nonlu">Non lus</option><option value="annonce">Annonces</option><option value="auto">Automatiques</option></select>
+          </div>
+          <div id="nt-hist"></div></div>
+
+        <div class="card"><div class="card-h">Modèles des messages automatiques</div><div class="card-b">
+          <div class="hint" style="margin-bottom:10px;">Variables utilisables : {nom} {numero} {type} {date} {heure} {remarques} {classe} {salle} {lieu} {poste}. Les modifications s'appliquent aux prochains messages.</div>
+          <div id="nt-modeles"></div>
+        </div></div>
       </div>
 
       <!-- EXPORT -->

@@ -16,7 +16,7 @@ function showAdmin(){
 let currentAdminTab='dashboard';
 function adSwitch(tab){
   currentAdminTab=tab;
-  ['dashboard','membres','expose','rapport','etudiants','config','seances','export'].forEach(t=>{
+  ['dashboard','membres','expose','rapport','etudiants','config','seances','notif','export'].forEach(t=>{
     document.getElementById('ad-tab-'+t).classList.toggle('on', t===tab);
     document.getElementById('ad-'+t).classList.toggle('hidden', t!==tab);
   });
@@ -24,8 +24,11 @@ function adSwitch(tab){
   if(tab==='membres'){ renderAdMembres(); renderAdMembresAlertes(); renderAdMembresBilan(); }
   if(tab==='expose'){ fillDocFilters('expose'); renderAdDocs('expose'); }
   if(tab==='rapport'){ fillDocFilters('rapport'); renderAdDocs('rapport'); }
-  if(tab==='etudiants') renderAdEtudiants(true);
+  if(tab==='etudiants'){ renderAdEtudiants(true); renderDoublons('etudiants'); }
+  if(tab==='notif') renderNotif();
+  if(tab==='config'){ renderReglages(); renderDoublons('membres'); fillSelect('bib-new-classe',reglages().classes); fillSelect('med-new-classe',reglages().classes); fillSelect('quiz-new-classe',reglages().classes); fillSelect('bib-new-type',reglages().typesSource); }
   if(tab==='config'){ renderAdMembresManage(); renderAdCreneaux(); renderAdMotifs(); renderAdEglises(); renderAdCommissions(); renderAdBiblio(); renderAdMeditations(); renderAdQuiz(); }
+  if(tab==='seances') fillSelect('se-classe', reglages().classes);
   if(tab==='seances'){ renderAdSeances(); renderAdSeancesAlertes(); renderEgliseStats(); fillSortieEgliseSelect(); renderAdSorties(); if(!document.querySelector('#se-themes-list .theme-row')) addThemeRow('se-themes-list'); }
   if(tab==='export'){ fillExportSelectors(); renderExportList(); }
 }
@@ -259,6 +262,8 @@ function renderAdMembresManage(){
 }
 function updateMembreField(i, field, value){
   if((field==='nom'||field==='code') && !String(value).trim()){ toast('Valeur requise','ko'); renderAdMembresManage(); return; }
+  if(field==='code' && DB.membres.some((m,j)=>j!==i && String(m.code)===String(value).trim())){ toast('Ce code est déjà utilisé par un autre membre','ko'); renderAdMembresManage(); return; }
+  if(field==='nom' && DB.membres.some((m,j)=>j!==i && cleNom(m.nom)===cleNom(value))){ toast('Ce nom existe déjà dans la liste des membres','ko'); renderAdMembresManage(); return; }
   DB.membres[i][field]=String(value).trim(); saveDB();
   renderAdMembresAlertes();
 }
@@ -269,6 +274,8 @@ function addMembre(){
   const nom=nomInp.value.trim(); const code=codeInp.value.trim();
   if(!nom){ toast('Nom requis','ko'); return; }
   if(!code){ toast('Code personnel requis','ko'); return; }
+  if(existeDeja(DB.membres.map(m=>m.nom), nom, cleNom)){ toast('Ce membre existe déjà dans la liste','ko'); return; }
+  if(DB.membres.some(m=>String(m.code)===code)){ toast('Ce code est déjà utilisé par un autre membre','ko'); return; }
   DB.membres.push({id:nid(), nom, code, tel:telInp.value.trim(), lieu:'', financier:'Moyen', spirituel:'Moyen', motifAbsence:''});
   saveDB(); nomInp.value=''; codeInp.value=''; telInp.value=''; renderAdMembresManage();
   toast('Membre ajouté','ok');
@@ -288,6 +295,7 @@ function addMotif(){
   const inp=document.getElementById('ad-mo-new');
   const v=inp.value.trim();
   if(!v){ toast('Nom requis','ko'); return; }
+  if(existeDeja(DB.motifsPresence, v)){ toast('Ce motif existe déjà','ko'); return; }
   DB.motifsPresence.push(v); saveDB(); inp.value=''; renderAdMotifs();
   toast('Motif ajouté','ok');
 }
@@ -306,6 +314,7 @@ function addEglise(){
   const inp=document.getElementById('ad-eg-new');
   const v=inp.value.trim();
   if(!v){ toast('Nom requis','ko'); return; }
+  if(existeDeja(DB.eglises, v)){ toast('Ce lieu existe déjà dans la liste','ko'); return; }
   DB.eglises.push(v); saveDB(); inp.value=''; renderAdEglises();
   toast('Lieu ajouté','ok');
 }
@@ -333,6 +342,7 @@ function addCommission(){
   const totInp=document.getElementById('ad-co-new-total');
   const nom=nomInp.value.trim();
   if(!nom){ toast('Nom requis','ko'); return; }
+  if(existeDeja(DB.commissions.map(c=>c.nom), nom)){ toast('Cette commission existe déjà','ko'); return; }
   DB.commissions.push({id:nid(), nom, totalAttendu: parseInt(totInp.value)||0});
   saveDB(); nomInp.value=''; totInp.value=''; renderAdCommissions();
   toast('Commission ajoutée','ok');
@@ -359,7 +369,7 @@ function removeCommission(i){
 function renderAdBiblio(){
   const el=document.getElementById('ad-bib-list');
   const list=DB.bibliotheque;
-  el.innerHTML = list.length ? ['Classe 1','Classe 2','Classe 3'].map(cl=>{
+  el.innerHTML = list.length ? uniq(reglages().classes.concat(list.map(b=>b.classe))).map(cl=>{
     const items=list.filter(b=>b.classe===cl);
     if(!items.length) return '';
     return `<div style="margin-bottom:8px;"><div class="hint" style="font-weight:700;color:var(--GRN);">${cl}</div>${items.map(b=>{
@@ -376,6 +386,7 @@ function addBiblio(){
   const lienInp=document.getElementById('bib-new-lien');
   const titre=titreInp.value.trim();
   if(!titre){ toast('Titre requis','ko'); return; }
+  if(DB.bibliotheque.some(b=>b.classe===classe && normName(b.titre)===normName(titre))){ toast('Cette source existe déjà pour '+classe,'ko'); return; }
   DB.bibliotheque.push({id:nid(), classe, type, titre, auteur:auteurInp.value.trim(), lien:lienInp.value.trim(), dateAjout:todayStr()});
   saveDB(); titreInp.value=''; auteurInp.value=''; lienInp.value=''; renderAdBiblio();
   toast('Source ajoutée à la bibliothèque','ok');
@@ -463,9 +474,9 @@ function signalerReprise(){
     themesProposes, statut:'programmee', presentateur:'', dateValidation:'', compteRendu:'', adminValide:false, dateDepotPremierJet:''};
   DB.sessions.push(session);
   // Informe les présentateurs et modérateurs assignés
-  presentateurs.forEach(p=>sendMessage(p.nom, `Vous êtes programmé(e) pour présenter la méthodologie des exposés en ${classe}, le ${dateProgrammee} — Salle ${salle}.`, p.tel));
-  if(session.moderateur1) sendMessage(session.moderateur1.nom, `Un 1er passage de présentation de la méthodologie est programmé pour ${classe} le ${dateProgrammee} — Salle ${salle}.`, session.moderateur1.tel);
-  if(session.moderateur2) sendMessage(session.moderateur2.nom, `Un 1er passage de présentation de la méthodologie est programmé pour ${classe} le ${dateProgrammee} — Salle ${salle}.`, session.moderateur2.tel);
+  const vSe={classe, date:frDate(dateProgrammee), salle};
+  presentateurs.forEach(p=>sendMessage(p.nom, modele('seancePresentateur',Object.assign({nom:p.nom},vSe)), p.tel, {titre:'Séance de méthodologie'}));
+  [session.moderateur1, session.moderateur2].filter(Boolean).forEach(mo=>sendMessage(mo.nom, modele('seanceModerateur',Object.assign({nom:mo.nom},vSe)), mo.tel, {titre:'Séance de méthodologie'}));
   saveDB();
   ['se-date-reprise','se-salle','se-pres1-nom','se-pres1-tel','se-pres2-nom','se-pres2-tel','se-mod1-nom','se-mod1-tel','se-mod2-nom','se-mod2-tel'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('se-themes-list').innerHTML=''; addThemeRow('se-themes-list');
@@ -565,7 +576,7 @@ function addSortie(){
   DB.sorties.push({id:nid(), eglise, date, postes, pv:'', statut:'programmee'});
   POSTES_SORTIE.forEach(p=>{
     const assigne=postes[p.key];
-    if(assigne) sendMessage(assigne.nom, `Vous êtes programmé(e) pour la sortie du ${date} à ${eglise}, en tant que ${p.label}.`, assigne.tel);
+    if(assigne) sendMessage(assigne.nom, modele('sortie',{nom:assigne.nom, date:frDate(date), lieu:eglise, poste:p.label}), assigne.tel, {titre:'Sortie programmée'});
   });
   saveDB();
   document.getElementById('so-date').value='';
@@ -1023,7 +1034,7 @@ function renderDashboard(){
   document.getElementById('db-activites').innerHTML =
     `<div class="msec">Séances de méthodologie</div>`+pills([['programmées',ses.filter(s=>s.statut==='programmee').length],['présentées (à valider)',ses.filter(s=>s.statut==='presentee').length],['validées',ses.filter(s=>s.statut==='validee').length]])+
     `<div class="msec" style="margin-top:14px;">Sorties dans les églises filles</div>`+pills([['programmées',so.filter(v=>v.statut!=='effectuee').length],['effectuées',so.filter(v=>v.statut==='effectuee').length],['PV rédigés',so.filter(v=>v.pv).length]])+
-    `<div class="msec" style="margin-top:14px;">Source Vases d'Honneur et calendrier</div>`+pills([['sources (Classe 1)',DB.bibliotheque.filter(b=>b.classe==='Classe 1').length],['sources (Classe 2)',DB.bibliotheque.filter(b=>b.classe==='Classe 2').length],['sources (Classe 3)',DB.bibliotheque.filter(b=>b.classe==='Classe 3').length],['méditations programmées',DB.meditations.length],['quiz bibliques',DB.quizBiblique.length]])+
+    `<div class="msec" style="margin-top:14px;">Source Vases d'Honneur et calendrier</div>`+pills(uniq(reglages().classes).map(c=>['sources ('+c+')',DB.bibliotheque.filter(b=>b.classe===c).length]).concat([['méditations programmées',DB.meditations.length],['quiz bibliques',DB.quizBiblique.length]]))+
     `<div class="msec" style="margin-top:14px;">Notifications</div>`+pills([['messages envoyés',DB.messages.length],['non lus',DB.messages.filter(m=>!m.lu).length]]);
 }
 /* Export du tableau de bord (Word / Excel) */
@@ -1049,3 +1060,218 @@ function exportDashboard(fmt){
   else downloadBytes(OfficeExport.buildDocx(m), file+'.docx', OfficeExport.MIME_DOCX);
   toast(fmt==='xlsx'?'Fichier Excel téléchargé':'Fichier Word téléchargé','ok');
 }
+
+/* ================================================================
+   PERSONNALISATION (listes, seuils, textes d'accueil)
+   ================================================================ */
+const LISTES_PERSO=[
+  ['classes','Classes'],['phasesExpose','Phases des exposés'],['phasesRapport','Phases des rapports de stage'],
+  ['niveaux','Niveaux (situation financière / spirituelle des membres)'],['typesSource','Types de sources (bibliothèque)']
+];
+function renderReglages(){
+  const r=reglages();
+  ['badge','titre1','titre2','suiviTitre1','suiviTitre2'].forEach(k=>{ const el=document.getElementById('rg-'+k); if(el && document.activeElement!==el) el.value=(r.accueil||{})[k]||''; });
+  ['retard','commissionFaible','absencesDimanche','reprise'].forEach(k=>{ const el=document.getElementById('rg-'+k); if(el && document.activeElement!==el) el.value=(r.seuils||{})[k]||''; });
+  document.getElementById('rg-listes').innerHTML = LISTES_PERSO.map(([k,lbl])=>`
+    <div style="margin-bottom:12px;"><div class="hint" style="font-weight:800;color:var(--GRN);margin-bottom:6px;">${lbl}</div>
+      <div class="mini-pills">${(r[k]||[]).map((v,i)=>`<span>${escapeHtml(v)} ${k.startsWith('phases')&&v===PHASE_DEFINITIVE?'<em class="hint">(obligatoire)</em>':`<a class="pill-link" href="javascript:void(0)" onclick="rgListeRenommer('${k}',${i})">Renommer</a> <a class="pill-link" style="background:var(--REDP);color:var(--RED);" href="javascript:void(0)" onclick="rgListeRetirer('${k}',${i})">Retirer</a>`}</span>`).join('')}</div>
+      <div class="theme-row" style="margin-top:6px;"><input class="inline-in" type="text" id="rg-new-${k}" placeholder="Ajouter..." onkeydown="if(event.key==='Enter')rgListeAjouter('${k}')"><button type="button" style="background:var(--GRNP);color:var(--GRN);" onclick="rgListeAjouter('${k}')">Ajouter</button></div>
+    </div>`).join('');
+}
+function rgListeAjouter(k){
+  const inp=document.getElementById('rg-new-'+k), v=inp.value.trim();
+  if(!v){ toast('Valeur requise','ko'); return; }
+  if(existeDeja(DB.reglages[k], v)){ toast('Cette valeur existe déjà dans la liste','ko'); return; }
+  DB.reglages[k].push(v); applyReglages(); saveDB(); renderReglages(); toast('Ajouté','ok');
+}
+function rgListeRetirer(k,i){
+  const v=DB.reglages[k][i];
+  if(DB.reglages[k].length<=1){ toast('La liste doit garder au moins une valeur','ko'); return; }
+  if(!confirm(`Retirer « ${v} » de la liste ?`)) return;
+  DB.reglages[k].splice(i,1); applyReglages(); saveDB(); renderReglages(); toast('Retiré','ok');
+}
+function rgListeRenommer(k,i){
+  const ancien=DB.reglages[k][i];
+  const v=(prompt('Nouveau nom :', ancien)||'').trim();
+  if(!v || v===ancien) return;
+  if(DB.reglages[k].some((x,j)=>j!==i && normName(x)===normName(v))){ toast('Cette valeur existe déjà','ko'); return; }
+  DB.reglages[k][i]=v;
+  // les fiches qui utilisaient l'ancien nom suivent le changement
+  if(k==='classes') ['bibliotheque','meditations','quizBiblique','sessions','expositions','presences','etudiants'].forEach(c=>(DB[c]||[]).forEach(r=>{ if(r.classe===ancien) r.classe=v; }));
+  if(k==='phasesExpose') DB.expositions.forEach(r=>{ if(r.phase===ancien) r.phase=v; });
+  if(k==='phasesRapport') DB.rapports.forEach(r=>{ if(r.phase===ancien) r.phase=v; });
+  if(k==='niveaux') DB.membres.forEach(m=>{ if(m.financier===ancien) m.financier=v; if(m.spirituel===ancien) m.spirituel=v; });
+  if(k==='typesSource') DB.bibliotheque.forEach(b=>{ if(b.type===ancien) b.type=v; });
+  applyReglages(); saveDB(); renderReglages(); toast('Renommé partout','ok');
+}
+function rgTexte(k,v){ DB.reglages.accueil[k]=v.trim(); saveDB(); toast('Texte enregistré','ok'); }
+function rgSeuil(k,v){ const n=parseInt(v,10); if(!(n>0)){ toast('Nombre invalide','ko'); renderReglages(); return; } DB.reglages.seuils[k]=n; applyReglages(); saveDB(); toast('Seuil enregistré','ok'); }
+
+/* ================================================================
+   DOUBLONS : détection et fusion
+   ================================================================ */
+function renderDoublons(type){
+  const list = type==='etudiants' ? DB.etudiants : DB.membres;
+  const el=document.getElementById(type==='etudiants'?'ads-doublons':'ad-mb-doublons'); if(!el) return;
+  const paires=doublonsProbables(list);
+  const card=document.getElementById('ads-doublons-card'); if(type==='etudiants' && card) card.classList.toggle('hidden', !paires.length);
+  if(!paires.length){ el.innerHTML=''; return; }
+  const info = x => type==='etudiants' ? (x.commission||'') : (x.role||'')+(x.tel?' — '+x.tel:'');
+  el.innerHTML = `<div class="alert-banner" style="margin:${type==='etudiants'?'12px 16px':'0 0 10px'};">${paires.length} doublon(s) possible(s) : choisissez la fiche à garder (les dépôts et pointages de l'autre lui sont rattachés).</div>` +
+    paires.map(([a,b])=>`<div class="list-item"><div class="li-sub" style="font-size:13px;color:var(--INK);"><b>${escapeHtml(a.nom)}</b> <span class="hint">${escapeHtml(info(a))}</span><br><b>${escapeHtml(b.nom)}</b> <span class="hint">${escapeHtml(info(b))}</span></div>
+      <div class="actions"><button class="btn-xs b-ok" onclick="fusionner('${type}','${a.id}','${b.id}')">Garder « ${escapeHtml(a.nom)} »</button><button class="btn-xs b-ok" onclick="fusionner('${type}','${b.id}','${a.id}')">Garder « ${escapeHtml(b.nom)} »</button><button class="btn-xs b-y" onclick="pasDoublon('${a.id}','${b.id}','${type}')">Ce ne sont pas des doublons</button></div></div>`).join('');
+}
+function fusionner(type, gardeId, jeteId){
+  const coll = type==='etudiants' ? 'etudiants' : 'membres';
+  const garde=DB[coll].find(x=>x.id===gardeId), jete=DB[coll].find(x=>x.id===jeteId);
+  if(!garde || !jete) return;
+  if(!confirm(`Garder « ${garde.nom} » et supprimer « ${jete.nom} » ?`)) return;
+  if(type==='etudiants'){
+    const kj=cleNom(jete.nom);
+    DB.rapports.concat(DB.expositions).forEach(r=>{ if(r.etudiantId===jete.id || cleNom(r.etudiantNom)===kj){ r.etudiantId=garde.id; r.etudiantNom=garde.nom; } });
+    // un seul rapport définitif pour l'étudiant conservé
+    const defs=DB.rapports.filter(r=>r.statut==='definitif' && cleNom(r.etudiantNom)===cleNom(garde.nom));
+    defs.slice(1).forEach(r=>{ if(r.source==='liste officielle') removeRecord('rapports', r.id); });
+    DB.messages.forEach(m=>{ if((!m.cible||m.cible==='personne') && cleNom(m.nom)===kj) m.nom=garde.nom; });
+  } else {
+    DB.presences.forEach(p=>{ if(p.membreId===jete.id){ p.membreId=garde.id; p.membreNom=garde.nom; } });
+    ['tel','eglise','lieu','motifAbsence'].forEach(k=>{ if(!garde[k] && jete[k]) garde[k]=jete[k]; });
+  }
+  removeRecord(coll, jete.id);
+  saveDB(); toast('Doublon fusionné','ok');
+  if(type==='etudiants'){ renderAdEtudiants(); renderDoublons('etudiants'); } else { renderAdMembresManage(); renderDoublons('membres'); }
+}
+function pasDoublon(a,b,type){
+  DB.reglages.nonDoublons=uniq((DB.reglages.nonDoublons||[]).concat([[a,b].sort().join('|')]), x=>x);
+  saveDB(); renderDoublons(type); toast('Noté : ce ne sont pas des doublons','ok');
+}
+
+/* ================================================================
+   NOTIFICATIONS (envoi, annonces, messages programmés, modèles)
+   ================================================================ */
+const JOURS_LBL=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+const CIBLE_LBL={personne:'Une personne',tous:'Tout le monde',etudiants:'Tous les étudiants',membres:'Tous les membres',commission:'Commission'};
+let PUSH_STATS=null;
+function personnesConnues(){
+  return uniq(DB.etudiants.map(e=>e.nom).concat(DB.membres.map(m=>m.nom)), cleNom).sort((a,b)=>a.localeCompare(b,'fr'));
+}
+function ntCibleChange(p){
+  const c=document.getElementById(p+'-cible').value;
+  document.getElementById(p+'-nom-wrap').classList.toggle('hidden', c!=='personne');
+  document.getElementById(p+'-com-wrap').classList.toggle('hidden', c!=='commission');
+}
+function renderNotif(){
+  const today=todayStr();
+  fillSelect('nt-com', DB.commissions.map(c=>c.nom)); fillSelect('pg-com', DB.commissions.map(c=>c.nom));
+  document.getElementById('nt-personnes').innerHTML=personnesConnues().map(n=>`<option value="${escapeHtml(n)}">`).join('');
+  ntCibleChange('nt'); ntCibleChange('pg');
+  const pj=document.getElementById('pg-jours');
+  if(!pj.children.length) pj.innerHTML=JOURS_LBL.map((j,i)=>`<span><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="checkbox" value="${i}" ${i===6?'checked':''}> ${j}</label></span>`).join('');
+  const kpis=[
+    ['Messages envoyés aujourd\'hui', DB.messages.filter(m=>m.date===today).length,'g'],
+    ['Messages personnels non lus', DB.messages.filter(m=>(!m.cible||m.cible==='personne') && !m.lu).length,'y'],
+    ['Annonces envoyées', DB.messages.filter(m=>m.cible && m.cible!=='personne').length,'n'],
+    ['Messages programmés actifs', DB.programmes.filter(p=>p.actif).length,'n'],
+    ['Téléphones abonnés (push)', PUSH_STATS?PUSH_STATS.total:'…','g'],
+    ['Écrans connectés en direct', PUSH_STATS?PUSH_STATS.enLigne:'…','g']
+  ];
+  document.getElementById('nt-kpis').innerHTML=kpis.map(([l,v,c])=>`<div class="kpi kpi-${c}"><div class="kv">${v}</div><div class="kl">${l}</div></div>`).join('');
+  fetch('/api/push/stats',{cache:'no-store'}).then(r=>r.json()).then(j=>{ const ch=!PUSH_STATS||PUSH_STATS.total!==j.total||PUSH_STATS.enLigne!==j.enLigne; PUSH_STATS=j; if(ch && currentAdminTab==='notif') renderNotif(); }).catch(()=>{});
+  renderProgrammes(); renderHistorique(); renderModeles();
+}
+function ntEnvoyer(){
+  const cible=document.getElementById('nt-cible').value;
+  const titre=document.getElementById('nt-titre').value.trim()||'Commission Exposé';
+  const texte=document.getElementById('nt-texte').value.trim();
+  if(!texte){ toast('Écrivez le message','ko'); return; }
+  if(cible==='personne'){
+    const nom=document.getElementById('nt-nom').value.trim();
+    if(!nom){ toast('Choisissez la personne','ko'); return; }
+    const mem=DB.membres.find(m=>cleNom(m.nom)===cleNom(nom));
+    const ok=sendMessage(mem?mem.nom:nom, texte, mem?mem.tel:'', {titre, type:'manuel'});
+    if(!ok){ toast('Ce message a déjà été envoyé à cette personne aujourd\'hui','ko'); return; }
+  } else {
+    const com=document.getElementById('nt-com').value;
+    if(cible==='commission' && !com){ toast('Choisissez la commission','ko'); return; }
+    if(DB.messages.some(m=>m.cible===cible && m.texte===texte && m.date===todayStr() && (cible!=='commission'||m.commission===com))){ toast('Cette annonce a déjà été envoyée aujourd\'hui','ko'); return; }
+    sendAnnonce(cible, texte, titre, com, 'Administration');
+  }
+  saveDB();
+  document.getElementById('nt-texte').value=''; document.getElementById('nt-titre').value='';
+  renderNotif(); toast('Message envoyé','ok');
+}
+function pgAjouter(){
+  const cible=document.getElementById('pg-cible').value;
+  const texte=document.getElementById('pg-texte').value.trim();
+  const titre=document.getElementById('pg-titre').value.trim()||'Rappel';
+  const heure=document.getElementById('pg-heure').value||'08:00';
+  const jours=Array.from(document.querySelectorAll('#pg-jours input:checked')).map(i=>parseInt(i.value,10));
+  const nom=document.getElementById('pg-nom').value.trim(), commission=document.getElementById('pg-com').value;
+  if(!texte){ toast('Écrivez le message','ko'); return; }
+  if(!jours.length){ toast('Choisissez au moins un jour','ko'); return; }
+  if(cible==='personne' && !nom){ toast('Choisissez la personne','ko'); return; }
+  if(DB.programmes.some(p=>p.cible===cible && p.heure===heure && normName(p.texte)===normName(texte))){ toast('Ce message est déjà programmé','ko'); return; }
+  DB.programmes.push({id:nid(), actif:true, cible, nom:cible==='personne'?nom:'', commission:cible==='commission'?commission:'', titre, texte, jours, heure, dernierEnvoi:''});
+  saveDB(); document.getElementById('pg-texte').value=''; document.getElementById('pg-titre').value='';
+  renderProgrammes(); toast('Message programmé','ok');
+}
+function renderProgrammes(){
+  const el=document.getElementById('pg-list');
+  el.innerHTML = DB.programmes.length ? DB.programmes.map(p=>`<div class="list-item" style="padding:10px 0;">
+    <div class="li-top"><div class="li-name">${escapeHtml(p.titre||'Rappel')} <span class="hint">— ${escapeHtml(p.cible==='personne'?p.nom:p.cible==='commission'?'Commission '+p.commission:CIBLE_LBL[p.cible])}</span></div><span class="badge ${p.actif?'bg':'bn'}">${p.actif?'Actif':'En pause'}</span></div>
+    <div class="li-sub">${escapeHtml(p.texte)}<br>${(p.jours||[]).map(j=>JOURS_LBL[j]).join(', ')} à ${escapeHtml(p.heure)}${p.dernierEnvoi?' • dernier envoi le '+frDate(p.dernierEnvoi):''}</div>
+    <div class="actions"><button class="btn-xs b-y" onclick="pgBasculer('${p.id}')">${p.actif?'Mettre en pause':'Réactiver'}</button><button class="btn-xs b-del" onclick="pgSupprimer('${p.id}')">Supprimer</button></div></div>`).join('')
+    : `<div class="empty">Aucun message programmé. Exemple : un rappel chaque samedi à 8 h pour tous les membres.</div>`;
+}
+function pgBasculer(id){ const p=DB.programmes.find(x=>x.id===id); if(!p) return; p.actif=!p.actif; saveDB(); renderProgrammes(); }
+function pgSupprimer(id){ if(!confirm('Supprimer ce message programmé ?')) return; removeRecord('programmes',id); saveDB(); renderProgrammes(); }
+function renderHistorique(){
+  const q=normName(document.getElementById('nt-q').value), fl=document.getElementById('nt-fl').value;
+  let list=DB.messages.slice().sort((a,b)=>((b.ts||0)-(a.ts||0)) || (b.date+b.heure).localeCompare(a.date+a.heure));
+  if(q) list=list.filter(m=>normName(m.nom).includes(q)||normName(m.texte).includes(q));
+  if(fl==='nonlu') list=list.filter(m=>(!m.cible||m.cible==='personne') && !m.lu);
+  if(fl==='annonce') list=list.filter(m=>m.cible && m.cible!=='personne');
+  if(fl==='auto') list=list.filter(m=>m.type==='document' || !m.type);
+  const total=list.length;
+  document.getElementById('nt-hist').innerHTML = total ? list.slice(0,150).map(m=>{
+    const annonce=m.cible && m.cible!=='personne';
+    const etat = annonce ? `<span class="badge bn">Lu par ${(m.luPar||[]).length}</span>` : (m.lu?'<span class="badge bg">Lu</span>':'<span class="badge by">Non lu</span>');
+    const wa=waLink(m.tel, m.texte);
+    return `<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(m.nom)} <span class="hint">— ${escapeHtml(m.titre||'Commission Exposé')}</span></div>${etat}</div>
+      <div class="li-sub" style="color:var(--INK);">${escapeHtml(m.texte)}</div>
+      <div class="li-sub">${frDate(m.date)} à ${escapeHtml(m.heure||'')}${m.type==='programme'?' • programmé':''}${annonce?' • annonce':''}</div>
+      <div class="actions">${wa?`<a class="pill-link" href="${wa}" target="_blank">WhatsApp</a>`:''}<button class="btn-xs b-del" onclick="msgSupprimer('${m.id}')">Supprimer</button></div></div>`;
+  }).join('') + (total>150?`<div class="empty">${total-150} message(s) plus anciens — affinez la recherche.</div>`:'') : `<div class="empty">Aucun message</div>`;
+}
+function msgSupprimer(id){ if(!confirm('Supprimer ce message ?')) return; removeRecord('messages',id); saveDB(); renderHistorique(); }
+function renderModeles(){
+  const el=document.getElementById('nt-modeles');
+  if(el.contains(document.activeElement)) return;
+  const m=reglages().modeles||{};
+  el.innerHTML=Object.keys(MODELES_LBL).map(k=>`<div class="fg"><label>${MODELES_LBL[k]}</label><textarea rows="2" onchange="rgModele('${k}',this.value)">${escapeHtml(m[k]||REGLAGES_DEFAUT.modeles[k])}</textarea>
+    <div style="text-align:right;margin-top:4px;"><button class="btn-xs b-y" onclick="rgModele('${k}',null)">Rétablir le texte d'origine</button></div></div>`).join('');
+}
+function rgModele(k,v){
+  DB.reglages.modeles[k] = (v===null || !String(v).trim()) ? REGLAGES_DEFAUT.modeles[k] : String(v).trim();
+  saveDB(); if(v===null){ document.activeElement && document.activeElement.blur(); renderModeles(); } toast('Modèle enregistré','ok');
+}
+
+/* ================= ALERTES EN DIRECT (dépôts, pointages) ================= */
+window.onActivite = function(a){
+  const main=document.getElementById('ad-main'); if(!main || main.classList.contains('hidden')) return;
+  const t = a.type==='expose' ? 'Nouvel exposé déposé' : a.type==='rapport' ? (a.statut==='definitif'?'Rapport définitif déposé':'Nouveau rapport de stage déposé') : 'Arrivée pointée';
+  const b = a.type==='presence' ? `${a.nom} — ${a.motif||''}` : `${a.nom} — n° ${a.numero}`;
+  ding(a.type!=='presence');
+  bandeau(t, b, ()=>adSwitch(a.type==='expose'?'expose':a.type==='rapport'?'rapport':'membres'));
+  notifSysteme(t, b);
+};
+window.onNotif = function(m){ if(currentAdminTab==='notif') setTimeout(renderNotif, 300); };
+function activerAlertesBureau(){
+  if(!('Notification' in window)) return;
+  Notification.requestPermission().then(()=>{ majBoutonAlertes(); if(Notification.permission==='granted') toast('Alertes du bureau activées','ok'); });
+}
+function majBoutonAlertes(){
+  const b=document.getElementById('ad-alertes-btn'); if(!b) return;
+  b.classList.toggle('hidden', !('Notification' in window) || Notification.permission!=='default');
+}
+majBoutonAlertes();

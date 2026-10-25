@@ -19,15 +19,15 @@
   <div style="width:100%;">
     <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
     <div class="hero">
-      <div class="hero-badge">Académie Vases d'Honneur</div>
-      <div class="hero-title">SUIVI DE MES<br><b>EXPOSÉS &amp; RAPPORTS</b></div>
+      <div class="hero-badge" id="acc-badge">Académie Vases d'Honneur</div>
+      <div class="hero-title"><span id="acc-t1">SUIVI DE MES</span><br><b id="acc-t2">EXPOSÉS &amp; RAPPORTS</b></div>
       <div class="hero-clock">Commission Exposé</div>
       <div class="sync-badge" style="margin-top:8px;"></div>
     </div>
     <div class="tiles">
       <button class="tile tile-1" onclick="openSuivi()" style="grid-column:span 2;">
-        <div class="tile-t">Mon suivi</div>
-        <div class="tile-s">Statuts de mes dépôts + notifications + remarques du correcteur</div>
+        <div class="tile-t">Mon suivi <span class="count-pill hidden" id="home-unread">0</span></div>
+        <div class="tile-s" id="home-moi">Statuts de mes dépôts + notifications + remarques du correcteur</div>
       </button>
       <button class="tile tile-2" onclick="openBibliotheque()" style="grid-column:span 2;">
         <div class="tile-t">Source Vases d'Honneur</div>
@@ -50,12 +50,31 @@
     <div class="scr-sub">Statuts et notifications</div>
   </div>
   <div class="scr-body">
-    <div class="srch-box"><input type="text" id="su-s" placeholder="Tapez votre nom..." oninput="renderSuivi()"></div>
+    <!-- 1. Qui êtes-vous ? (une seule fois sur ce téléphone) -->
+    <div id="su-qui" class="card"><div class="card-b">
+      <div class="fg"><label>Qui êtes-vous ?</label><input type="text" id="su-s" placeholder="Tapez votre nom puis choisissez-le" autocomplete="off" oninput="suChercher()"></div>
+      <div class="pick-list hidden" id="su-list"></div>
+      <div class="hint">Votre nom est retenu sur ce téléphone : vous recevrez vos notifications sans le retaper.</div>
+    </div></div>
 
-    <div id="su-docs"></div>
-
-    <div class="card-h" style="background:transparent;border:none;padding:14px 0 8px;color:var(--MUT);font-size:12px;text-transform:uppercase;letter-spacing:.4px;">Notifications</div>
-    <div class="card"><div id="su-messages"></div></div>
+    <!-- 2. Mon espace -->
+    <div id="su-moi" class="hidden">
+      <div class="card"><div class="card-b" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div><div style="font-weight:800;font-size:15px;" id="su-moi-nom"></div><div class="hint" id="su-moi-sub"></div></div>
+        <button class="btn-sm btn-ghost" onclick="suChanger()">Changer de nom</button>
+      </div></div>
+      <div class="card"><div class="card-h">Notifications sur ce téléphone</div><div class="card-b">
+        <div class="note-txt" id="su-push-etat"></div>
+        <button class="btn btn-g" id="su-push-btn" onclick="suActiverPush()">Activer les notifications</button>
+      </div></div>
+      <div class="card-h" style="background:transparent;border:none;padding:6px 0 8px;color:var(--MUT);font-size:12px;text-transform:uppercase;letter-spacing:.4px;">Mes documents</div>
+      <div id="su-docs"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0 8px;">
+        <div class="card-h" style="background:transparent;border:none;padding:0;color:var(--MUT);font-size:12px;text-transform:uppercase;letter-spacing:.4px;">Notifications et annonces <span class="count-pill hidden" id="su-unread">0</span></div>
+        <button class="btn-sm btn-ghost" onclick="suToutLu()">Tout marquer comme lu</button>
+      </div>
+      <div class="card"><div id="su-messages"></div></div>
+    </div>
   </div>
 </div>
 
@@ -69,11 +88,7 @@
     <div class="scr-sub">Livres et sources autorisés pour les exposés</div>
   </div>
   <div class="scr-body">
-    <div class="seg">
-      <button id="bib-tab-1" class="on" onclick="biblioSwitch('Classe 1')">Classe 1</button>
-      <button id="bib-tab-2" onclick="biblioSwitch('Classe 2')">Classe 2</button>
-      <button id="bib-tab-3" onclick="biblioSwitch('Classe 3')">Classe 3</button>
-    </div>
+    <div class="seg" id="bib-tabs"></div>
     <div class="card"><div id="bib-list"></div></div>
   </div>
 </div>

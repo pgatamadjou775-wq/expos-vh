@@ -240,3 +240,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .suc-title::before{content:'Enregistré';display:block;width:max-content;margin:0 auto 14px;padding:8px 20px;border-radius:999px;background:var(--GRNP);color:var(--GRN);font-size:12px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;animation:pop .4s ease;}
 @media (max-width:420px){ .tile{padding-right:30px;} .tile::after{display:none;} }
 .kpi .kv{white-space:nowrap;}
+
+/* ===== Bandeau de notification (temps réel) ===== */
+.notif-bandeau{position:fixed;left:50%;top:14px;transform:translate(-50%,-140%);width:min(560px,calc(100% - 24px));z-index:1000;background:var(--GRN);color:#fff;border-radius:999px;padding:12px 24px;box-shadow:0 14px 40px rgba(13,59,46,.35);cursor:pointer;transition:transform .35s cubic-bezier(.2,.9,.3,1.2);border:2px solid var(--YEL);}
+.notif-bandeau.on{transform:translate(-50%,0);}
+.notif-bandeau .nb-t{font-weight:800;font-size:14px;color:var(--YEL);}
+.notif-bandeau .nb-b{font-size:13px;line-height:1.35;margin-top:2px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.count-pill{display:inline-block;min-width:22px;padding:2px 8px;border-radius:999px;background:var(--RED);color:#fff;font-size:11px;font-weight:800;text-align:center;margin-left:6px;vertical-align:middle;}
+/* cases à cocher (jours des messages programmés) : pas de style « pilule » */
+.fg .mini-pills input[type=checkbox]{width:17px;height:17px;padding:0;-webkit-appearance:checkbox;appearance:auto;accent-color:var(--GRN3);border-radius:4px;}
+.mini-pills label{font-weight:700;color:var(--INK);font-size:12.5px;text-transform:none;letter-spacing:0;margin:0;}

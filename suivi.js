@@ -1,19 +1,26 @@
 /* ============================================================
    COMMISSION EXPOSÉ — Interface "Suivi"
-   Destinée aux étudiants (installable sur leur téléphone).
+   Destinée aux étudiants et aux membres (installable sur le téléphone).
+   - L'utilisateur choisit son nom une seule fois (retenu sur le téléphone)
+   - Notifications en direct : bandeau + son + vibration (application ouverte)
+   - Notifications push : même application fermée (serveur en HTTPS)
    Dépend de core.js (modèle de données partagé)
    ============================================================ */
 
 function goHome(){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
   document.getElementById('s-home').classList.add('on');
+  majCompteurs();
 }
 function goScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
   document.getElementById(id).classList.add('on');
 }
+const LS_MOI='CE_MOI';
+function getMoi(){ try{ return localStorage.getItem(LS_MOI)||''; }catch(e){ return ''; } }
+function setMoi(v){ try{ if(v) localStorage.setItem(LS_MOI,v); else localStorage.removeItem(LS_MOI); }catch(e){} }
 
-/* ================= MON SUIVI (statuts + notifications) ================= */
+/* ================= MON SUIVI ================= */
 const STATUT_INFO = {
   depose:       {lbl:'Déposé — en attente de correction', cls:'bn'},
   en_correction:{lbl:'En cours de correction', cls:'by'},
@@ -25,68 +32,152 @@ const STATUT_INFO = {
 };
 function openSuivi(){
   goScreen('s-suivi');
+  renderSuivi();
+}
+// Personnes connues (étudiants + membres), sans doublons
+function personnesConnues(){
+  const l=DB.etudiants.map(e=>({nom:e.nom, sub:'Étudiant — '+(e.commission||'')}))
+    .concat(DB.membres.map(m=>({nom:m.nom, sub:m.role||'Membre de la commission'})));
+  return uniq(l, x=>cleNom(x.nom));
+}
+function suChercher(){
+  const q=normName(document.getElementById('su-s').value);
+  const list=document.getElementById('su-list');
+  if(q.length<2){ list.classList.add('hidden'); list.innerHTML=''; return; }
+  const res=personnesConnues().filter(p=>normName(p.nom).includes(q)).slice(0,25);
+  list.classList.remove('hidden');
+  const saisi=document.getElementById('su-s').value.trim();
+  list.innerHTML = res.map((p,i)=>`<div class="pick-item" onclick="suChoisir(${JSON.stringify(p.nom).replace(/"/g,'&quot;')})"><div style="flex:1;"><div class="pk-name">${escapeHtml(p.nom)}</div><div class="pk-sub">${escapeHtml(p.sub)}</div></div></div>`).join('')
+    + `<div class="pick-item" onclick="suChoisir(${JSON.stringify(saisi).replace(/"/g,'&quot;')})"><div style="flex:1;"><div class="pk-name">Utiliser « ${escapeHtml(saisi)} »</div><div class="pk-sub">Si votre nom n'est pas dans la liste (responsable, mandataire…)</div></div></div>`;
+}
+function suChoisir(nom){
+  if(!nom) return;
+  setMoi(nom);
   document.getElementById('su-s').value='';
-  document.getElementById('su-docs').innerHTML = `<div class="empty">Tapez votre nom pour voir le suivi de vos dépôts</div>`;
-  document.getElementById('su-messages').innerHTML = '';
+  document.getElementById('su-list').classList.add('hidden');
+  renderSuivi(); majCompteurs();
+  toast('Bienvenue '+nom,'ok');
+}
+function suChanger(){
+  if(!confirm('Changer de nom sur ce téléphone ?')) return;
+  desactiverPush(); setMoi(''); renderSuivi(); majCompteurs();
+}
+function mesMessages(moi){
+  return DB.messages.filter(m=>messageConcerne(m,moi)).sort((a,b)=>((b.ts||0)-(a.ts||0)) || (b.date+b.heure).localeCompare(a.date+a.heure));
+}
+function nbNonLus(moi){ return moi ? mesMessages(moi).filter(m=>!messageLu(m,moi)).length : 0; }
+function majCompteurs(){
+  const moi=getMoi(), n=nbNonLus(moi);
+  [['home-unread',n],['su-unread',n]].forEach(([id,v])=>{ const el=document.getElementById(id); if(el){ el.textContent=v; el.classList.toggle('hidden',!v); } });
+  const hm=document.getElementById('home-moi');
+  if(hm) hm.textContent = moi ? `${moi} — ${n?n+' notification(s) non lue(s)':'aucune nouvelle notification'}` : 'Statuts de mes dépôts + notifications + remarques du correcteur';
+  try{ if(navigator.setAppBadge){ n?navigator.setAppBadge(n):navigator.clearAppBadge(); } }catch(e){}
+}
+function etatPush(){
+  const el=document.getElementById('su-push-etat'), btn=document.getElementById('su-push-btn');
+  if(!el) return;
+  if(!pushDisponible()){
+    el.innerHTML='Application ouverte : vous êtes prévenu en direct (bandeau, son et vibration).<br><span class="hint">Pour être prévenu téléphone verrouillé, l\'application doit être ouverte en HTTPS (serveur en ligne). Sur iPhone : « Ajouter à l\'écran d\'accueil » d\'abord.</span>';
+    btn.classList.add('hidden'); return;
+  }
+  const p=('Notification' in window)?Notification.permission:'default';
+  if(p==='granted' && localStorage.getItem('CE_PUSH')===normName(getMoi())){ el.textContent='Activées : vous serez prévenu même téléphone verrouillé.'; btn.textContent='Réactiver'; }
+  else if(p==='denied'){ el.textContent='Bloquées dans les réglages du navigateur : réautorisez-les pour ce site.'; btn.textContent='Réessayer'; }
+  else { el.textContent='Être prévenu quand mon document est corrigé, même téléphone verrouillé.'; btn.textContent='Activer les notifications'; }
+  btn.classList.remove('hidden');
+}
+async function suActiverPush(){
+  try{ await activerPush(getMoi()); try{ localStorage.setItem('CE_PUSH',normName(getMoi())); }catch(e){} toast('Notifications activées','ok'); }
+  catch(e){ toast(e.message,'ko'); }
+  etatPush();
 }
 function renderSuivi(){
-  const q=normName(document.getElementById('su-s').value);
-  const docsEl=document.getElementById('su-docs');
-  const msgEl=document.getElementById('su-messages');
-  if(!q){
-    docsEl.innerHTML = `<div class="empty">Tapez votre nom pour voir le suivi de vos dépôts</div>`;
-    msgEl.innerHTML='';
-    return;
-  }
-  const matchName = n => normName(n).includes(q);
-  const mesExposes = DB.expositions.filter(x=>matchName(x.etudiantNom));
-  const mesRapports = DB.rapports.filter(x=>matchName(x.etudiantNom) || matchName(x.responsable&&x.responsable.nom) || matchName(x.mandataire&&x.mandataire.nom));
-  const tous = [
-    ...mesExposes.map(x=>({...x, type:'Exposé'})),
-    ...mesRapports.map(x=>({...x, type:'Rapport de stage'}))
-  ].sort((a,b)=>b.tsDepot-a.tsDepot);
-
-  docsEl.innerHTML = tous.length ? tous.map(x=>{
+  const moi=getMoi();
+  document.getElementById('su-qui').classList.toggle('hidden', !!moi);
+  document.getElementById('su-moi').classList.toggle('hidden', !moi);
+  if(!moi) return;
+  const n=normName(moi);
+  const etu=DB.etudiants.find(e=>normName(e.nom)===n), mem=DB.membres.find(m=>normName(m.nom)===n);
+  document.getElementById('su-moi-nom').textContent=moi;
+  document.getElementById('su-moi-sub').textContent = etu ? 'Étudiant — commission '+(etu.commission||'—') : mem ? (mem.role||'Membre de la commission') : 'Responsable / mandataire';
+  etatPush();
+  const est = v => normName(v)===n;
+  const mesExposes = DB.expositions.filter(x=>est(x.etudiantNom));
+  const mesRapports = DB.rapports.filter(x=>est(x.etudiantNom) || est(x.responsable&&x.responsable.nom) || est(x.mandataire&&x.mandataire.nom));
+  const tous = [...mesExposes.map(x=>({...x, type:'Exposé'})), ...mesRapports.map(x=>({...x, type:'Rapport de stage'}))]
+    .filter((x,i,a)=>a.findIndex(y=>y.id===x.id)===i)
+    .sort((a,b)=>(b.tsDepot||0)-(a.tsDepot||0));
+  document.getElementById('su-docs').innerHTML = tous.length ? tous.map(x=>{
     const info = STATUT_INFO[x.statut] || {lbl:x.statut, cls:'bn'};
-    return `<div class="list-item" style="border:1px solid var(--LINE);border-radius:10px;margin-bottom:8px;">
-      <div class="li-top"><div class="li-name">${escapeHtml(x.type)} — ${x.numero}</div><span class="badge ${info.cls}">${info.lbl}</span></div>
+    return `<div class="list-item card" style="margin-bottom:8px;">
+      <div class="li-top"><div class="li-name">${escapeHtml(x.type)} — ${escapeHtml(x.numero)}${est(x.etudiantNom)?'':' <span class="hint">('+escapeHtml(x.etudiantNom)+')</span>'}</div><span class="badge ${info.cls}">${info.lbl}</span></div>
       <div class="li-sub">${x.source==='liste officielle'?'Enregistré depuis la liste officielle':'Déposé le '+frDate(x.dateDepot)+(x.heureDepot?' à '+x.heureDepot:'')}${x.commission?' • '+escapeHtml(x.commission):''}${x.dateCorrection?' • Corrigé le '+frDate(x.dateCorrection):''}${x.dateRetrait?' • Retiré le '+frDate(x.dateRetrait):''}</div>
       ${x.commentaire ? `<div class="note-box ${x.statut==='corrige_complet'||x.statut==='retire'?'complet':'partiel'}" style="margin-top:8px;"><div class="note-lbl">Remarques du correcteur</div><div class="note-txt">${escapeHtml(x.commentaire)}</div></div>` : ''}
     </div>`;
-  }).join('') : `<div class="empty"><p>Aucun exposé ou rapport trouvé pour ce nom</p></div>`;
-
-  const mine = DB.messages.filter(m=>matchName(m.nom)).sort((a,b)=>(b.date+b.heure).localeCompare(a.date+a.heure));
-  msgEl.innerHTML = mine.length ? mine.map(m=>{
-    const link=waLink(m.tel, m.texte);
-    return `<div class="list-item">
-      <div class="li-top" style="cursor:pointer;" onclick="markMessageRead('${m.id}')"><div class="li-name">${escapeHtml(m.nom)}</div>${m.lu?'':'<span class="badge by">Nouveau</span>'}</div>
-      <div class="li-sub">${escapeHtml(m.texte)}</div>
-      <div class="hint" style="margin-top:4px;">${m.date} à ${m.heure}</div>
-      ${link ? `<a href="${link}" target="_blank" class="btn-sm btn-g" style="margin-top:8px;display:inline-block;text-decoration:none;">Envoyer via WhatsApp</a>` : ''}
+  }).join('') : `<div class="card"><div class="empty">Aucun exposé ou rapport enregistré à ce nom pour le moment</div></div>`;
+  const mine=mesMessages(moi);
+  document.getElementById('su-messages').innerHTML = mine.length ? mine.map(m=>{
+    const link=waLink(m.tel, m.texte), lu=messageLu(m,moi);
+    return `<div class="list-item" style="cursor:pointer;${lu?'':'background:var(--YELP);'}" onclick="suLire('${m.id}')">
+      <div class="li-top"><div class="li-name">${escapeHtml(m.titre||'Commission Exposé')}</div>${lu?'':'<span class="badge by">Nouveau</span>'}${m.cible&&m.cible!=='personne'?'<span class="badge bn">'+escapeHtml(m.nom)+'</span>':''}</div>
+      <div class="li-sub" style="color:var(--INK);font-size:13px;">${escapeHtml(m.texte)}</div>
+      <div class="hint" style="margin-top:4px;">${frDate(m.date)} à ${escapeHtml(m.heure||'')}</div>
+      ${link ? `<a href="${link}" target="_blank" class="pill-link" style="margin-top:8px;" onclick="event.stopPropagation()">Envoyer via WhatsApp</a>` : ''}
     </div>`;
-  }).join('') : `<div class="empty"><p>Aucune notification pour ce nom</p></div>`;
+  }).join('') : `<div class="empty">Aucune notification pour le moment</div>`;
+  majCompteurs();
 }
-function markMessageRead(id){
-  const m=DB.messages.find(x=>x.id===id); if(!m || m.lu) return;
-  m.lu=true; saveDB(); renderSuivi();
+function suLire(id){
+  const m=DB.messages.find(x=>x.id===id), moi=getMoi(); if(!m || messageLu(m,moi)) return;
+  marquerLu(m,moi); saveDB(); renderSuivi();
+}
+function suToutLu(){
+  const moi=getMoi(); let n=0;
+  mesMessages(moi).forEach(m=>{ if(!messageLu(m,moi)){ marquerLu(m,moi); n++; } });
+  if(n){ saveDB(); renderSuivi(); }
 }
 
 /* ================= SOURCE VASES D'HONNEUR (bibliothèque) ================= */
+let bibClasse='';
 function openBibliotheque(){
   goScreen('s-biblio');
-  biblioSwitch('Classe 1');
+  biblioSwitch(bibClasse || reglages().classes[0]);
 }
 function biblioSwitch(classe){
-  ['1','2','3'].forEach(n=>document.getElementById('bib-tab-'+n).classList.toggle('on', classe==='Classe '+n));
-  const list=(DB.bibliotheque||[]).filter(b=>b.classe===classe);
+  bibClasse=classe;
+  document.getElementById('bib-tabs').innerHTML = uniq(reglages().classes).map(c=>`<button class="${c===classe?'on':''}" onclick="biblioSwitch(${JSON.stringify(c).replace(/"/g,'&quot;')})">${escapeHtml(c)}</button>`).join('');
+  const list=uniq((DB.bibliotheque||[]).filter(b=>b.classe===classe), b=>normName(b.titre));
   document.getElementById('bib-list').innerHTML = list.length ? list.map(b=>`
     <div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(b.titre)}</div><span class="badge bn">${escapeHtml(b.type||'Livre')}</span></div>
     <div class="li-sub">${b.auteur?'Auteur : '+escapeHtml(b.auteur):''}${b.lien?'<br>'+escapeHtml(b.lien):''}</div></div>`).join('')
     : `<div class="empty"><p>Aucune source enregistrée pour cette classe pour le moment</p></div>`;
 }
 
-/* ================= INIT ================= */
-window.onRemoteUpdate = function(){
-  updateSyncBadge();
-  if(document.getElementById('s-suivi').classList.contains('on')) renderSuivi();
+/* ================= TEXTES D'ACCUEIL (personnalisables) ================= */
+function appliquerAccueil(){
+  const a=reglages().accueil||{};
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el && v) el.textContent=v; };
+  set('acc-badge',a.badge); set('acc-t1',a.suiviTitre1); set('acc-t2',a.suiviTitre2);
+}
+
+/* ================= TEMPS RÉEL ================= */
+window.onNotif = function(m){
+  const moi=getMoi();
+  if(!moi || !messageConcerne(m,moi)) return;
+  if(!DB.messages.some(x=>x.id===m.id)) DB.messages.push(m);
+  ding();
+  bandeau(m.titre||'Commission Exposé', m.texte, ()=>openSuivi());
+  notifSysteme(m.titre||'Commission Exposé', m.texte);
+  if(document.getElementById('s-suivi').classList.contains('on')) renderSuivi(); else majCompteurs();
 };
+window.onRemoteUpdate = function(){
+  updateSyncBadge(); appliquerAccueil();
+  if(document.getElementById('s-suivi').classList.contains('on')) renderSuivi(); else majCompteurs();
+  if(document.getElementById('s-biblio').classList.contains('on')) biblioSwitch(bibClasse);
+};
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type==='open') openSuivi(); });
+  if(window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+appliquerAccueil(); majCompteurs();
+if(new URLSearchParams(location.search).get('vue')==='suivi') openSuivi();
