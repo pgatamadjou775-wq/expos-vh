@@ -1,17 +1,20 @@
 # Commission Exposé — Académie Vases d'Honneur
 ## Guide d'installation et d'utilisation (tablette + PC + téléphones étudiants)
 
-## Contenu du dossier — 3 interfaces
+## Contenu du dossier — 5 interfaces
 - `index.html` — page d'accueil (choix entre les 3 interfaces)
 - `etudiant.html` + `etudiant.js` — **"Bienvenue à l'Académie"** : pointer son arrivée, dépôt/retrait d'exposés et de rapports de stage, espace correcteur (tablette de la commission)
 - `admin.html` + `admin.js` — **Administration** (protégée par code) : statistiques, configuration, séances, sorties, exports (PC)
 - `suivi.html` + `suivi.js` + `manifest.json` — **Suivi** : à installer sur le téléphone de chaque étudiant qui dépose un exposé ou un rapport — statuts en temps réel, notifications, remarques du correcteur, bibliothèque "Source Vases d'Honneur"
-- `core.css` + `core.js` — fichiers partagés par les 3 interfaces (NE PAS RENOMMER NI DÉPLACER)
+- `moderateur.html` + `moderateur.js` — **Modérateurs de classe** (téléphone) : exposés et méthodologie de leurs classes en direct, demandes à l'administration
+- `jury.html` + `jury.js` — **Membres du jury** (téléphone) : dossier complet de chaque étudiant (correcteurs, observations réellement envoyées)
+- `discussion.js` — module de discussion partagé (messages, pièces jointes, justificatifs)
+- `core.css` + `core.js` — fichiers partagés par toutes les interfaces (NE PAS RENOMMER NI DÉPLACER)
 - `export.js` — génération des fichiers Word (.docx) et Excel (.xlsx), sans Internet
 - `banniere.jpg` — bannière de l'Académie affichée en haut des écrans
 - `server.js` — petit serveur local qui permet à tous les appareils de partager les mêmes données
 - `Demarrer-Windows.bat` — double-clic pour lancer le serveur sous Windows
-- Créés automatiquement à la première utilisation : `data.json` (la base de données), `photos/`, `sauvegardes/`
+- Créés automatiquement à la première utilisation : `data.json` (la base de données), `push.json`, `photos/`, `justificatifs/`, `sauvegardes/`
 
 **Gardez tous ces fichiers ensemble, dans le même dossier.**
 
@@ -225,3 +228,48 @@ Remplacez seulement les fichiers du code ; ne supprimez pas `data.json`, `push.j
 - Une copie datée de la base est faite chaque jour dans `sauvegardes/`.
 - Chaque tablette / téléphone garde une copie locale : si le serveur redémarrait vide, le premier appareil qui se reconnecte lui renvoie ses données.
 - Avant un premier passage en ligne, téléchargez une copie de `data.json` (et `photos/`).
+
+
+---
+
+## Version 6 — modérateurs, jury, discussions, cohérence
+
+### Espace Modérateurs de classe — `moderateur.html`
+- Connexion : nom + code à 4 chiffres (remis par l'administration ; mémorisé sur le téléphone).
+- **Exposés de ma classe** : chaque dépôt, la prise en correction, le correcteur, les observations envoyées, le retrait — en direct.
+- **Méthodologie dans ma classe** : séance programmée → présentée (compte-rendu, présentateur) → validée (thèmes, date du 1er jet).
+- **Notifications** : le modérateur est prévenu à chaque étape (bandeau + son ; push si le serveur est en HTTPS).
+- **Demande à l'administration** : nouvelle visite, présentation, problème… avec date souhaitée et pièce jointe. La réponse arrive dans sa Discussion.
+- Les modérateurs saisis sur les séances et les dépôts d'exposés sont ajoutés automatiquement au registre (sans doublon).
+
+### Espace Membres du jury — `jury.html`
+- **Dossier d'un étudiant** : tous ses dépôts dans l'ordre, qui les a corrigés et quand, les observations **réellement envoyées**, le retrait, les photos, et les messages qu'il a reçus.
+- **Constats automatiques** : « jamais pris en correction », « corrigé mais pas retiré », « correction partielle », « aucune nouvelle version après la dernière correction »… Le jury n'est plus piégé par un « c'est passé à la correction ».
+- Listes de tous les exposés (filtre « corrigé sans observation »), rapports par commission, activité de chaque correcteur, mes sorties.
+- Bouton **Signaler ce dossier à l'administration**.
+- Les présidents et jurys des sorties sont inscrits automatiquement.
+
+### Discussion avec n'importe qui + justificatifs
+- Disponible dans le Suivi (étudiants), l'Espace Correcteur (tablette), les espaces Modérateurs et Jury, et l'Administration (onglet **Discussions**).
+- Pièces jointes : photo, PDF, Word, texte (6 Mo maximum), stockées dans `justificatifs/`.
+- Un **justificatif** reste « en attente » jusqu'à ce que l'administration l'**accepte** ou le **refuse** (avec commentaire) ; la personne est prévenue.
+
+### Chaque étudiant ne voit que ce qui le concerne
+- Dans le Suivi, l'étudiant choisit son nom puis **crée son code personnel** à la première ouverture. Sans ce code, rien n'est affiché.
+- Code oublié : Administration → Modérateurs & Jury → « Codes personnels du Suivi » → Réinitialiser.
+
+### Cohérence des données (le « 150/100 » est corrigé)
+- Le taux de rapports définitifs se calcule désormais **sur les étudiants réellement sous la charge du responsable** (plus de « total attendu » saisi à la main) : il ne peut jamais dépasser 100 %.
+- **Dr Éric ZAGBEU / commission Exposé** : tous les membres de la commission sont dans sa liste, ainsi que tout étudiant dont le rapport de stage le désigne comme responsable.
+- Un rapport déposé pour un étudiant absent de la liste l'y ajoute, sous la charge du responsable indiqué.
+- Administration → Rapports : carte **Cohérence des données** (bouton « Tout corriger ») et vue **Sous la charge de chaque responsable**.
+
+### Administration — nouveautés
+- Onglet **Discussions** : justificatifs en attente, demandes des modérateurs, signalements du jury, toutes les conversations.
+- Onglet **Modérateurs & Jury** : ajout, classes, nouveau code, envoi du code par WhatsApp, retrait ; codes du Suivi.
+- Annonces à **tous les modérateurs** ou à **tous les membres du jury**.
+- Export Word/Excel : **Modérateurs de classe et membres du jury — codes**.
+- Tableau de bord : modérateurs, jury, discussions non lues, justificatifs en attente, incohérences.
+
+### Mise à jour depuis la version 5
+Remplacez les fichiers du programme et redémarrez : **les données sont conservées** et mises à jour automatiquement à la première ouverture (comme pour les versions précédentes). Ne remplacez jamais `data.json`, `push.json`, `photos/`, `justificatifs/`, `sauvegardes/`.

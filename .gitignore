@@ -5,6 +5,7 @@ data.json.tmp
 data.corrompu.json
 push.json
 photos/
+justificatifs/
 sauvegardes/
 *.tmp
 node_modules/

@@ -16,9 +16,17 @@ function goScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
   document.getElementById(id).classList.add('on');
 }
-const LS_MOI='CE_MOI';
-function getMoi(){ try{ return localStorage.getItem(LS_MOI)||''; }catch(e){ return ''; } }
-function setMoi(v){ try{ if(v) localStorage.setItem(LS_MOI,v); else localStorage.removeItem(LS_MOI); }catch(e){} }
+const LS_MOI='CE_MOI', LS_CLE='CE_MOI_CLE';
+// Le nom n'est retenu qu'après le code personnel : chacun ne voit que ce qui le concerne.
+function getMoi(){
+  let n=''; try{ n=localStorage.getItem(LS_MOI)||''; }catch(e){}
+  if(!n) return '';
+  const a=accesDe(n);
+  let cle=''; try{ cle=localStorage.getItem(LS_CLE)||''; }catch(e){}
+  if(!a || a.pin!==cle){ return ''; }   // code réinitialisé par l'administration ou jamais créé
+  return n;
+}
+function setMoi(v, cle){ try{ if(v){ localStorage.setItem(LS_MOI,v); localStorage.setItem(LS_CLE,cle||''); } else { localStorage.removeItem(LS_MOI); localStorage.removeItem(LS_CLE); } }catch(e){} }
 
 /* ================= MON SUIVI ================= */
 const STATUT_INFO = {
@@ -50,16 +58,41 @@ function suChercher(){
   list.innerHTML = res.map((p,i)=>`<div class="pick-item" onclick="suChoisir(${JSON.stringify(p.nom).replace(/"/g,'&quot;')})"><div style="flex:1;"><div class="pk-name">${escapeHtml(p.nom)}</div><div class="pk-sub">${escapeHtml(p.sub)}</div></div></div>`).join('')
     + `<div class="pick-item" onclick="suChoisir(${JSON.stringify(saisi).replace(/"/g,'&quot;')})"><div style="flex:1;"><div class="pk-name">Utiliser « ${escapeHtml(saisi)} »</div><div class="pk-sub">Si votre nom n'est pas dans la liste (responsable, mandataire…)</div></div></div>`;
 }
+let suNomEnCours='';
 function suChoisir(nom){
   if(!nom) return;
-  setMoi(nom);
-  document.getElementById('su-s').value='';
+  suNomEnCours=nom;
   document.getElementById('su-list').classList.add('hidden');
-  renderSuivi(); majCompteurs();
-  toast('Bienvenue '+nom,'ok');
+  document.getElementById('su-s').value=nom;
+  const a=accesDe(nom);
+  document.getElementById('su-pin').classList.remove('hidden');
+  document.getElementById('su-pin1').value=''; document.getElementById('su-pin2').value='';
+  document.getElementById('su-pin2-wrap').classList.toggle('hidden', !!a);
+  document.getElementById('su-pin-txt').textContent = a ? `Entrez le code personnel de ${nom}.` : `Première connexion de ${nom} : créez votre code personnel (4 chiffres). Il protège vos informations : gardez-le pour vous.`;
+  document.getElementById('su-pin-lbl').textContent = a ? 'Code personnel' : 'Nouveau code personnel (4 chiffres)';
+  setTimeout(()=>document.getElementById('su-pin1').focus(),50);
+}
+function suAnnulerPin(){ suNomEnCours=''; document.getElementById('su-pin').classList.add('hidden'); document.getElementById('su-s').value=''; }
+let suEssais=0;
+function suValiderPin(){
+  const nom=suNomEnCours, p1=document.getElementById('su-pin1').value.trim(), p2=document.getElementById('su-pin2').value.trim();
+  if(!nom) return;
+  if(!/^\d{4,6}$/.test(p1)){ toast('Le code doit contenir 4 à 6 chiffres','ko'); return; }
+  const a=accesDe(nom);
+  if(a){
+    if(suEssais>=5){ toast('Trop d\'essais : demandez à l\'administration de réinitialiser votre code','ko'); return; }
+    if(hashPin(nom,p1)!==a.pin){ suEssais++; toast('Code incorrect','ko'); return; }
+    setMoi(nom, a.pin);
+  } else {
+    if(p1!==p2){ toast('Les deux codes ne sont pas identiques','ko'); return; }
+    const nv=definirPin(nom,p1); saveDB(); setMoi(nom, nv.pin);
+  }
+  suEssais=0; suNomEnCours='';
+  document.getElementById('su-pin').classList.add('hidden'); document.getElementById('su-s').value='';
+  renderSuivi(); majCompteurs(); toast('Bienvenue '+nom,'ok');
 }
 function suChanger(){
-  if(!confirm('Changer de nom sur ce téléphone ?')) return;
+  if(!confirm('Se déconnecter de ce téléphone ?')) return;
   desactiverPush(); setMoi(''); renderSuivi(); majCompteurs();
 }
 function mesMessages(moi){
@@ -68,6 +101,8 @@ function mesMessages(moi){
 function nbNonLus(moi){ return moi ? mesMessages(moi).filter(m=>!messageLu(m,moi)).length : 0; }
 function majCompteurs(){
   const moi=getMoi(), n=nbNonLus(moi);
+  const nc=moi?chatsNonLus(moi):0;
+  [['home-chat',nc]].forEach(([id,v])=>{ const el=document.getElementById(id); if(el){ el.textContent=v; el.classList.toggle('hidden',!v); } });
   [['home-unread',n],['su-unread',n]].forEach(([id,v])=>{ const el=document.getElementById(id); if(el){ el.textContent=v; el.classList.toggle('hidden',!v); } });
   const hm=document.getElementById('home-moi');
   if(hm) hm.textContent = moi ? `${moi} — ${n?n+' notification(s) non lue(s)':'aucune nouvelle notification'}` : 'Statuts de mes dépôts + notifications + remarques du correcteur';
@@ -137,6 +172,15 @@ function suToutLu(){
   if(n){ saveDB(); renderSuivi(); }
 }
 
+/* ================= DISCUSSION ================= */
+function openDiscussion(){
+  const moi=getMoi();
+  if(!moi){ toast('Identifiez-vous d\'abord dans « Mon suivi »','ko'); openSuivi(); return; }
+  goScreen('s-disc');
+  Discussion.monter('disc-zone', moi, {montrer:()=>goScreen('s-disc'), onChange:majCompteurs});
+}
+window.onChat = function(c){ if(Discussion.moi!==getMoi()) Discussion.moi=getMoi(); if(Discussion.surNouveau(c)) majCompteurs(); };
+
 /* ================= SOURCE VASES D'HONNEUR (bibliothèque) ================= */
 let bibClasse='';
 function openBibliotheque(){
@@ -174,10 +218,14 @@ window.onRemoteUpdate = function(){
   updateSyncBadge(); appliquerAccueil();
   if(document.getElementById('s-suivi').classList.contains('on')) renderSuivi(); else majCompteurs();
   if(document.getElementById('s-biblio').classList.contains('on')) biblioSwitch(bibClasse);
+  if(document.getElementById('s-disc').classList.contains('on')) Discussion.apresSync();
 };
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type==='open') openSuivi(); });
+  navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type==='open'){ if(String(e.data.url).includes('discussion')) openDiscussion(); else openSuivi(); } });
   if(window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
 appliquerAccueil(); majCompteurs();
-if(new URLSearchParams(location.search).get('vue')==='suivi') openSuivi();
+Discussion.moi=getMoi();
+const vueDemandee=new URLSearchParams(location.search).get('vue');
+if(vueDemandee==='suivi') openSuivi();
+if(vueDemandee==='discussion') openDiscussion();

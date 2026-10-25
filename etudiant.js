@@ -147,6 +147,12 @@ function notifyDoc(x, cle, vars){
   if(x.responsable && x.responsable.nom) dest.push([x.responsable.nom, x.responsable.tel]);
   if(x.mandataire && x.mandataire.nom) dest.push([x.mandataire.nom, x.mandataire.tel]);
   uniq(dest, d=>cleNom(d[0])).forEach(([nom,tel])=>sendMessage(nom, texte, tel, {titre:titres[cle]||'Commission Exposé', type:'document'}));
+  // Les modérateurs de la classe suivent l'évolution des exposés de leur classe
+  if(type==='exposé'){
+    const etapes={depotExpose:'a été déposé à la commission', enCorrection:'est en cours de correction'+(x.correcteur?' (correcteur : '+x.correcteur+')':''),
+      correctionTerminee:'a été corrigé'+(x.statut==='corrige_partiel'?' partiellement':' complètement')+(x.correcteur?' par '+x.correcteur:'')+(x.commentaire?'. Observations : '+x.commentaire:''), retrait:'a été retiré par l\'étudiant'};
+    if(etapes[cle]) notifierModerateurs(x.classe, [{nom:x.moderateur}], modele('moderateurExpose', Object.assign({}, v, {classe:x.classe||'', etape:etapes[cle]})), 'Exposé — '+(x.classe||'ma classe'));
+  }
 }
 
 /* ================================================================
@@ -249,6 +255,7 @@ function confirmArrivee(){
       session.presentateur=prSelMembre.nom;
       session.dateValidation=todayStr();
       session.compteRendu=document.getElementById('pr-compte-rendu').value.trim();
+      notifierModerateurs(classe, [session.moderateur1, session.moderateur2], modele('methodoPresentee',{classe, date:frDate(todayStr()), presentateur:prSelMembre.nom, compteRendu: session.compteRendu?' Compte-rendu : '+session.compteRendu:''}), 'Méthodologie — '+classe);
       extraMsg = ' — Présentation effectuée (compte-rendu transmis à l\'administration pour validation finale)';
     } else if(session && !valide){
       extraMsg = ' — Séance programmée non encore validée.';
@@ -321,6 +328,7 @@ function confirmDepotExpose(){
     dateDepot: todayStr(), heureDepot: nowTimeStr(), tsDepot: nowFull(), dateCorrection:'', dateRetrait:''
   };
   DB.expositions.push(rec);
+  if(rec.moderateur) ajouterModerateur(rec.moderateur, '', rec.classe);
   notifyDoc(rec, 'depotExpose');
   saveDB();
   document.getElementById('ex-deposer').classList.add('hidden');
@@ -445,6 +453,8 @@ function confirmDepotRapport(){
   } else {
     notifyDoc(rec, 'depotRapport');
   }
+  // cohérence : l'étudiant apparaît dans la liste, sous la charge du responsable désigné par son rapport
+  corrigerCoherence(DB);
   saveDB();
   document.getElementById('rp-deposer').classList.add('hidden');
   document.getElementById('rp-success').classList.remove('hidden');
@@ -530,11 +540,23 @@ function corAuth(){
 }
 function corLogout(){ corUser=null; goHome(); }
 function corSwitch(type){
-  corType=type;
   document.getElementById('cor-tab-e').classList.toggle('on', type==='expose');
   document.getElementById('cor-tab-r').classList.toggle('on', type==='rapport');
+  document.getElementById('cor-tab-d').classList.toggle('on', type==='disc');
+  document.getElementById('cor-disc').classList.toggle('hidden', type!=='disc');
+  document.getElementById('cor-lists').classList.toggle('hidden', type==='disc');
+  corMajDisc();
+  if(type==='disc'){ Discussion.monter('cor-disc', corUser.nom, {onChange:corMajDisc}); return; }
+  corType=type;
   renderCorLists();
 }
+function corMajDisc(){ const el=document.getElementById('cor-disc-n'); if(!el||!corUser) return; const n=chatsNonLus(corUser.nom); el.textContent=n; el.classList.toggle('hidden',!n); }
+window.onChat = function(c){
+  if(!corUser) return;
+  if(Discussion.moi===corUser.nom && !document.getElementById('cor-disc').classList.contains('hidden')) Discussion.surNouveau(c);
+  else if(cleNom(c.a)===cleNom(corUser.nom)){ if(!DB.chats.some(x=>x.id===c.id)) DB.chats.push(c); ding(); bandeau('Message de '+c.de, c.texte||'pièce jointe', ()=>corSwitch('disc')); }
+  corMajDisc();
+};
 function corDB(){ return corType==='expose' ? DB.expositions : DB.rapports; }
 // Un rapport de stage définitif (ou dont l'étudiant a déjà son définitif) n'apparaît plus en correction
 function corVisible(x){
@@ -635,6 +657,6 @@ window.onRemoteUpdate = function(){
   if(document.getElementById('s-presence').classList.contains('on') && !document.getElementById('pr-search').classList.contains('hidden')) prFilter();
   if(document.getElementById('s-expose').classList.contains('on') && !document.getElementById('ex-retirer').classList.contains('hidden')) renderExRetrait();
   if(document.getElementById('s-rapport').classList.contains('on') && !document.getElementById('rp-retirer').classList.contains('hidden')) renderRpRetrait();
-  if(!document.getElementById('cor-main').classList.contains('hidden')) renderCorLists();
+  if(!document.getElementById('cor-main').classList.contains('hidden')){ if(!document.getElementById('cor-disc').classList.contains('hidden')) Discussion.apresSync(); else renderCorLists(); corMajDisc(); }
   updateSyncBadge();
 };

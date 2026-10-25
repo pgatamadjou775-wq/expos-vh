@@ -283,11 +283,15 @@
       <div class="seg">
         <button id="cor-tab-e" class="on" onclick="corSwitch('expose')">Exposés</button>
         <button id="cor-tab-r" onclick="corSwitch('rapport')">Rapports de stage</button>
+        <button id="cor-tab-d" onclick="corSwitch('disc')">Discussion <span class="count-pill hidden" id="cor-disc-n">0</span></button>
       </div>
+      <div id="cor-disc" class="hidden"></div>
+      <div id="cor-lists">
       <div class="card-h" style="background:transparent;border:none;padding:0 0 8px;color:var(--MUT);font-size:12px;text-transform:uppercase;letter-spacing:.4px;">Mes corrections en cours</div>
       <div class="card"><div id="cor-mine" class="pick-list" style="border:none;box-shadow:none;"></div></div>
       <div class="card-h" style="background:transparent;border:none;padding:0 0 8px;color:var(--MUT);font-size:12px;text-transform:uppercase;letter-spacing:.4px;">Disponibles pour correction</div>
       <div class="card"><div id="cor-dispo" class="pick-list" style="border:none;box-shadow:none;"></div></div>
+      </div>
     </div>
 
     <div id="cor-detail" class="hidden"></div>
@@ -297,6 +301,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="core.js"></script>
+<script src="discussion.js"></script>
 <script src="etudiant.js"></script>
 </body>
 </html>

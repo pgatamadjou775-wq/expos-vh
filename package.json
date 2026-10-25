@@ -1,6 +1,6 @@
 {
   "name": "commission-expose",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "Commission Exposé — Académie Vases d'Honneur : accueil (tablette), appli Suivi (téléphones), administration. Un seul serveur Node.js sans dépendance.",
   "main": "server.js",
   "scripts": { "start": "node server.js" },

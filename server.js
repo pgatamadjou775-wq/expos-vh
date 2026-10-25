@@ -15,6 +15,7 @@
      4) Sur la tablette / les téléphones (même Wi-Fi) : http://ADRESSE_IP_DU_PC:8000
    ============================================================ */
 
+process.env.TZ = process.env.TZ || 'Africa/Abidjan';   // heure de la Côte d'Ivoire (comme Sha'ah)
 const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
@@ -33,19 +34,21 @@ const DATA_DIR = process.env.DATA_DIR || (process.env.DATA_FILE ? path.dirname(p
 const DATA_FILE = process.env.DATA_FILE || path.join(DATA_DIR, 'data.json');
 const PHOTO_DIR = path.join(DATA_DIR, 'photos');
 const BACKUP_DIR = path.join(DATA_DIR, 'sauvegardes');
+const PIECES_DIR = path.join(DATA_DIR, 'justificatifs');   // pièces jointes et justificatifs des discussions
 try{ fs.mkdirSync(DATA_DIR,{recursive:true}); }catch(e){}
 // Première mise en place du disque persistant : on y recopie les données présentes à côté du code
 if(path.resolve(DATA_DIR)!==path.resolve(ROOT) && !fs.existsSync(DATA_FILE) && fs.existsSync(path.join(ROOT,'data.json'))){
   try{
     fs.copyFileSync(path.join(ROOT,'data.json'), DATA_FILE);
     if(fs.existsSync(path.join(ROOT,'push.json')) && !fs.existsSync(path.join(DATA_DIR,'push.json'))) fs.copyFileSync(path.join(ROOT,'push.json'), path.join(DATA_DIR,'push.json'));
+    ['photos','justificatifs'].forEach(dossier=>{ if(fs.existsSync(path.join(ROOT,dossier)) && dossier==='justificatifs'){ fs.mkdirSync(path.join(DATA_DIR,dossier),{recursive:true}); fs.readdirSync(path.join(ROOT,dossier)).forEach(f=>{ const d=path.join(DATA_DIR,dossier,f); if(!fs.existsSync(d)) fs.copyFileSync(path.join(ROOT,dossier,f), d); }); } });
     if(fs.existsSync(path.join(ROOT,'photos'))){ fs.mkdirSync(path.join(DATA_DIR,'photos'),{recursive:true}); fs.readdirSync(path.join(ROOT,'photos')).forEach(f=>{ const d=path.join(DATA_DIR,'photos',f); if(!fs.existsSync(d)) fs.copyFileSync(path.join(ROOT,'photos',f), d); }); }
     console.log('Données recopiées vers le disque persistant : '+DATA_DIR);
   }catch(e){ console.error('Recopie des données impossible :', e.message); }
 }
 
 // Doit correspondre à core.js
-const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes'];
+const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes','moderateurs','jury','chats','acces'];
 const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode','reglages'];
 const PUSH_FILE = path.join(DATA_DIR, 'push.json');   // clés VAPID + abonnements (jamais envoyé aux appareils)
 
@@ -56,7 +59,7 @@ const MIME = {
   '.ico':'image/x-icon', '.md':'text/plain; charset=utf-8', '.webmanifest':'application/manifest+json'
 };
 
-[PHOTO_DIR, BACKUP_DIR].forEach(d=>{ try{ fs.mkdirSync(d,{recursive:true}); }catch(e){} });
+[PHOTO_DIR, BACKUP_DIR, PIECES_DIR].forEach(d=>{ try{ fs.mkdirSync(d,{recursive:true}); }catch(e){} });
 
 /* ---------------- Données en mémoire ---------------- */
 let DB = null;
@@ -195,6 +198,8 @@ function concerne(m, nom){
   if(m.cible==='etudiants') return !!etu;
   if(m.cible==='membres') return !!mem;
   if(m.cible==='commission') return !!(etu && etu.commission===m.commission);
+  if(m.cible==='moderateurs') return (DB.moderateurs||[]).some(x=>normName(x.nom)===n);
+  if(m.cible==='jury') return (DB.jury||[]).some(x=>normName(x.nom)===n);
   return false;
 }
 // Un nouveau message : écrans ouverts prévenus + notification push aux abonnés concernés
@@ -204,13 +209,22 @@ function diffuserMessage(m){
   PUSH.abonnements.forEach(a=>{
     if(!concerne(m, a.nom) || vus.has(a.endpoint)) return;
     vus.add(a.endpoint);
-    sendPush(a, {title:m.titre||'Commission Exposé', body:m.texte, tag:'ce-'+m.id, url:'suivi.html?vue=suivi'});
+    sendPush(a, {title:m.titre||'Commission Exposé', body:m.texte, tag:'ce-'+m.id, url:(a.page||'suivi.html')+'?vue=suivi'});
   });
 }
 // Détection de ce qui est nouveau après une synchronisation
 function idsDe(db, k){ return new Set(((db&&db[k])||[]).map(r=>r.id)); }
 function analyserNouveautes(avant, apres){
   const recent = Date.now()-6*3600*1000;   // on ne renotifie pas les vieux messages d'un appareil resté hors-ligne
+  // nouvelles discussions : écrans ouverts + push au destinataire
+  const cAvant=idsDe(avant,'chats');
+  (apres.chats||[]).forEach(c=>{
+    if(cAvant.has(c.id) || (c.ts||0)<recent) return;
+    toAll('chat', c);
+    const vus=new Set();
+    PUSH.abonnements.forEach(a=>{ if(normName(a.nom)!==normName(c.a) || vus.has(a.endpoint)) return; vus.add(a.endpoint);
+      sendPush(a, {title:'Message de '+c.de, body:c.texte || (c.pieces&&c.pieces.length?'Pièce jointe : '+c.pieces[0].nom:''), tag:'chat-'+c.fil, url:(a.page||'suivi.html')+'?vue=discussion'}); });
+  });
   const mAvant=idsDe(avant,'messages');
   (apres.messages||[]).forEach(m=>{ if(!mAvant.has(m.id) && (m.ts||0)>recent) diffuserMessage(m); });
   [['expositions','expose'],['rapports','rapport'],['presences','presence']].forEach(([k,type])=>{
@@ -271,7 +285,8 @@ const server = http.createServer((req, res) => {
       const s=b.subscription||{};
       if(!b.nom || !s.endpoint || !s.keys || !s.keys.p256dh || !s.keys.auth){ sendJSON(res,400,{ok:false,error:'Abonnement invalide'}); return; }
       PUSH.abonnements=PUSH.abonnements.filter(a=>a.endpoint!==s.endpoint);   // pas de doublon d'abonnement
-      PUSH.abonnements.push({nom:String(b.nom).slice(0,120), endpoint:s.endpoint, keys:{p256dh:s.keys.p256dh, auth:s.keys.auth}, at:new Date().toISOString()});
+      const page=['suivi.html','moderateur.html','jury.html','admin.html','etudiant.html'].includes(b.page)?b.page:'suivi.html';
+      PUSH.abonnements.push({nom:String(b.nom).slice(0,120), page, endpoint:s.endpoint, keys:{p256dh:s.keys.p256dh, auth:s.keys.auth}, at:new Date().toISOString()});
       savePush(); sendJSON(res,200,{ok:true});
     }).catch(()=>sendJSON(res,400,{ok:false}));
     return;
@@ -299,6 +314,33 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ---- Pièces jointes / justificatifs ----
+  if(urlPath0 === '/api/fichier' && req.method==='POST'){
+    lireCorps(req, 9*1024*1024).then(b=>{
+      const m=/^data:([\w/.+-]+);base64,(.+)$/.exec(String(b.data||''));
+      if(!m){ sendJSON(res,400,{ok:false,error:'Fichier invalide'}); return; }
+      const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf','text/plain':'txt','application/msword':'doc','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx'}[m[1]];
+      if(!ext){ sendJSON(res,400,{ok:false,error:'Format non accepté (photo, PDF, Word ou texte)'}); return; }
+      const buf=Buffer.from(m[2],'base64');
+      if(buf.length>6*1024*1024){ sendJSON(res,413,{ok:false,error:'Fichier trop volumineux (6 Mo maximum)'}); return; }
+      const nom=Date.now().toString(36)+'-'+crypto.randomBytes(4).toString('hex')+'.'+ext;
+      fs.writeFile(path.join(PIECES_DIR,nom), buf, err=>{
+        if(err){ sendJSON(res,500,{ok:false,error:'Enregistrement impossible'}); return; }
+        sendJSON(res,200,{ok:true, url:'justificatifs/'+nom, taille:buf.length});
+      });
+    }).catch(()=>sendJSON(res,413,{ok:false,error:'Fichier trop volumineux'}));
+    return;
+  }
+  if(urlPath0.startsWith('/justificatifs/')){
+    const nom=path.basename(decodeURIComponent(urlPath0));
+    fs.readFile(path.join(PIECES_DIR, nom), (err, c)=>{
+      if(err){ res.writeHead(404); res.end('Fichier introuvable'); return; }
+      const ext=path.extname(nom).toLowerCase();
+      const types={'.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp','.pdf':'application/pdf','.txt':'text/plain; charset=utf-8','.doc':'application/msword','.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
+      res.writeHead(200, {'Content-Type': types[ext]||'application/octet-stream', 'Content-Disposition': (ext==='.jpg'||ext==='.png'||ext==='.webp'||ext==='.pdf')?'inline':'attachment', 'X-Content-Type-Options':'nosniff', 'Cache-Control':'max-age=86400'}); res.end(c);
+    });
+    return;
+  }
   // ---- Photos de couverture (dossier de données) ----
   if(urlPath0.startsWith('/photos/')){
     const nom=path.basename(decodeURIComponent(urlPath0));

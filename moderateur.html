@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d3b2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Modérateurs VH">
+<link rel="manifest" href="manifest.json">
+<title>Modérateurs de classe — Académie Vases d'Honneur</title>
+<link rel="stylesheet" href="core.css">
+</head>
+<body>
+
+<!-- ================= ACCUEIL ================= -->
+<div class="screen on" id="s-home">
+  <div style="width:100%;">
+    <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
+    <div class="hero">
+      <div class="hero-badge" id="acc-badge">Académie Vases d'Honneur</div>
+      <div class="hero-title">ESPACE<br><b>MODÉRATEURS DE CLASSE</b></div>
+      <div class="hero-clock" id="md-qui">Commission Exposé</div>
+      <div class="sync-badge" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- connexion -->
+    <div id="md-login" class="scr-body" style="margin-top:-30px;position:relative;z-index:3;">
+      <div class="card"><div class="card-b">
+        <div class="fg"><label>Votre nom</label><input type="text" id="md-nom" placeholder="Tapez votre nom puis choisissez-le" autocomplete="off" oninput="mdChercher()"></div>
+        <div class="pick-list hidden" id="md-list" style="margin-bottom:12px;"></div>
+        <div class="fg"><label>Code personnel</label><input type="password" inputmode="numeric" id="md-code" placeholder="••••" onkeydown="if(event.key==='Enter')mdConnexion()"></div>
+        <button class="btn btn-g" onclick="mdConnexion()">Accéder à mon espace</button>
+        <div class="hint" style="margin-top:10px;">Votre code vous est remis par l'administration de la commission exposé.</div>
+      </div></div>
+    </div>
+
+    <!-- menu -->
+    <div class="tiles hidden" id="md-menu">
+      <button class="tile tile-1" onclick="ouvrir('s-exp')"><div class="tile-t">Exposés de ma classe <span class="count-pill hidden" id="c-exp">0</span></div><div class="tile-s" id="t-exp">Dépôts, corrections, observations, retraits</div></button>
+      <button class="tile tile-2" onclick="ouvrir('s-meth')"><div class="tile-t">Méthodologie dans ma classe</div><div class="tile-s" id="t-meth">Séances programmées, présentées, validées</div></button>
+      <button class="tile tile-3" onclick="ouvrir('s-notif')"><div class="tile-t">Mes notifications <span class="count-pill hidden" id="c-notif">0</span></div><div class="tile-s">Tout ce qui se passe dans ma classe, en direct</div></button>
+      <button class="tile tile-4" onclick="ouvrir('s-disc')"><div class="tile-t">Discussion <span class="count-pill hidden" id="c-disc">0</span></div><div class="tile-s">Échanger avec l'administration ou toute autre personne</div></button>
+      <button class="tile tile-1" onclick="ouvrir('s-dem')"><div class="tile-t">Faire une demande à l'administration</div><div class="tile-s">Nouvelle visite, présentation, problème dans ma classe…</div></button>
+      <div class="home-foot"><button class="btn-sm btn-ghost" onclick="mdDeconnexion()">Se déconnecter</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EXPOSÉS DE MA CLASSE ================= -->
+<div class="screen" id="s-exp">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Exposés de ma classe</div></div><div class="scr-sub">Mis à jour en direct</div></div>
+  <div class="scr-body">
+    <div class="seg" id="exp-classes"></div>
+    <div class="mini-pills" id="exp-stats" style="margin-bottom:12px;"></div>
+    <div class="srch-box"><input type="text" id="exp-q" placeholder="Rechercher un étudiant ou un numéro..." oninput="rendreExposes()"></div>
+    <div id="exp-list"></div>
+  </div>
+</div>
+
+<!-- ================= MÉTHODOLOGIE ================= -->
+<div class="screen" id="s-meth">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Méthodologie</div></div><div class="scr-sub">Présentations dans mes classes</div></div>
+  <div class="scr-body"><div id="meth-list"></div></div>
+</div>
+
+<!-- ================= NOTIFICATIONS ================= -->
+<div class="screen" id="s-notif">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Mes notifications</div></div><div class="scr-sub">Exposés, méthodologie, annonces</div></div>
+  <div class="scr-body">
+    <div class="card"><div class="card-b"><div class="note-txt" id="push-etat"></div><button class="btn btn-g" id="push-btn" onclick="mdPush()">Activer les notifications</button></div></div>
+    <div style="text-align:right;margin-bottom:8px;"><button class="btn-sm btn-ghost" onclick="toutLu()">Tout marquer comme lu</button></div>
+    <div class="card"><div id="notif-list"></div></div>
+  </div>
+</div>
+
+<!-- ================= DISCUSSION ================= -->
+<div class="screen" id="s-disc">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Discussion</div></div><div class="scr-sub">Messages, pièces jointes et justificatifs</div></div>
+  <div class="scr-body"><div id="disc-zone"></div></div>
+</div>
+
+<!-- ================= DEMANDE ================= -->
+<div class="screen" id="s-dem">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Demande à l'administration</div></div><div class="scr-sub">L'administration est prévenue tout de suite</div></div>
+  <div class="scr-body">
+    <div class="card"><div class="card-b">
+      <div class="fg"><label>Objet de la demande</label>
+        <select id="dem-type">
+          <option>Proposer une nouvelle visite dans ma classe</option>
+          <option>Programmer une présentation de la méthodologie</option>
+          <option>Signaler un problème dans ma classe</option>
+          <option>Autre demande</option>
+        </select></div>
+      <div class="fg-row">
+        <div class="fg"><label>Classe concernée</label><select id="dem-classe"></select></div>
+        <div class="fg"><label>Date souhaitée (facultatif)</label><input type="date" id="dem-date"></div>
+      </div>
+      <div class="fg"><label>Message</label><textarea id="dem-texte" rows="4" placeholder="Expliquez votre demande..."></textarea></div>
+      <div class="fg"><label>Pièce jointe (facultatif)</label>
+        <label class="btn-sm btn-ghost" style="position:relative;overflow:hidden;cursor:pointer;display:inline-block;">Joindre une photo ou un document<input type="file" id="dem-fichier" accept="image/*,application/pdf,.doc,.docx,.txt" style="position:absolute;inset:0;opacity:0;cursor:pointer;" onchange="demJoindre(this)"></label>
+        <div class="mini-pills" id="dem-pieces" style="margin-top:8px;"></div></div>
+      <button class="btn btn-y" onclick="demEnvoyer()">Envoyer la demande</button>
+    </div></div>
+    <div class="card"><div class="card-h">Mes demandes</div><div id="dem-list"></div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="core.js"></script>
+<script src="discussion.js"></script>
+<script src="moderateur.js"></script>
+</body>
+</html>

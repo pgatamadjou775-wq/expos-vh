@@ -37,14 +37,18 @@ const REGLAGES_DEFAUT = {
     retrait:'Retrait confirmé pour le {type} n° {numero}. Merci.',
     seancePresentateur:'Vous êtes programmé(e) pour présenter la méthodologie des exposés en {classe}, le {date} — Salle {salle}.',
     seanceModerateur:'Un 1er passage de présentation de la méthodologie est programmé pour {classe} le {date} — Salle {salle}.',
-    sortie:'Vous êtes programmé(e) pour la sortie du {date} à {lieu}, en tant que {poste}.'
+    sortie:'Vous êtes programmé(e) pour la sortie du {date} à {lieu}, en tant que {poste}.',
+    moderateurExpose:'{classe} : l\'exposé n° {numero} de {nom} {etape}.',
+    methodoPresentee:'La méthodologie a été présentée en {classe} le {date} par {presentateur}.{compteRendu}',
+    methodoValidee:'La présentation de la méthodologie en {classe} (passage n°{numero}) est validée. Thèmes proposés : {themes}. Date de dépôt du 1er jet : {date}.'
   },
   nonDoublons:[]   // paires marquées « ce ne sont pas des doublons »
 };
 const MODELES_LBL = {
   depotExpose:'Exposé reçu', depotRapport:'Rapport de stage reçu', depotDefinitif:'Rapport définitif reçu',
   enCorrection:'Document pris en correction', correctionTerminee:'Correction terminée', retrait:'Retrait confirmé',
-  seancePresentateur:'Séance : présentateur programmé', seanceModerateur:'Séance : modérateur informé', sortie:'Sortie : personne programmée'
+  seancePresentateur:'Séance : présentateur programmé', seanceModerateur:'Séance : modérateur informé', sortie:'Sortie : personne programmée',
+  moderateurExpose:'Modérateur : évolution d\'un exposé de sa classe', methodoPresentee:'Modérateur : méthodologie présentée dans sa classe', methodoValidee:'Modérateur : présentation validée'
 };
 function reglages(){ return (typeof DB!=='undefined' && DB && DB.reglages) || REGLAGES_DEFAUT; }
 function applyReglages(){
@@ -73,7 +77,7 @@ function fillSelect(id, list, opts){
    Source : Etudiants_par_commission_2.docx (115 lignes, 16 commissions).
    Le responsable de commission est rattaché à chaque étudiant.
    Pour une commission rattachée à une église fille, le responsable est « Église fille ». */
-const DATA_VERSION = 5;
+const DATA_VERSION = 6;
 const OFFICIEL_COMMISSIONS = [
   {"id": "cm-01", "nom": "Logistique", "responsable": "TRAORE Charles", "totalAttendu": 16},
   {"id": "cm-02", "nom": "Cours", "responsable": "Mme OUALLE", "totalAttendu": 20},
@@ -330,9 +334,238 @@ function ensureOfficialData(db){
   if((db.dataVersion||0) < 3) ensureMembresV3(db);
   if((db.dataVersion||0) < 4) ensureMembresV4(db);
   if((db.dataVersion||0) < 5){ dedoublonnerV5(db); if(db.reglages) db.reglages.version=5; }   // la marque force l'enregistrement des réglages sur le serveur
+  if((db.dataVersion||0) < 6){ ensureV6(db); if(db.reglages) db.reglages.version=6; }
   db.dataVersion = DATA_VERSION;
   return true;
 }
+/* ================= v6 : COHÉRENCE, MODÉRATEURS, JURY ================= */
+function slug(s){ return cleNom(s).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48)||'x'; }
+function codeAleatoire(dejaPris){ let c; do{ c=String(1000+Math.floor(Math.random()*9000)); }while((dejaPris||[]).includes(c) || new Set(c).size<2); return c; }
+// Deux noms désignent-ils la même personne ? (même nom, ou au moins 2 mots en commun)
+function memePersonne(a,b){
+  if(cleNom(a)===cleNom(b)) return true;
+  const mots = n => new Set(cleNom(n).split(' ').filter(w=>w.length>=3 && !['nee','epse','epouse','des','les'].includes(w)));
+  const A=mots(a), B=mots(b); let c=0; A.forEach(w=>{ if(B.has(w)) c++; }); return c>=2;
+}
+function ensureV6(db){
+  if(!db.tombstones) db.tombstones={};
+  ['moderateurs','jury','chats','acces'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; });
+  // 1) Les membres de la commission Exposé sont sous la charge de son responsable :
+  //    chacun est relié à sa fiche étudiant ; ceux qui n'en ont pas sont ajoutés à la commission Exposé.
+  const comExpose=(db.commissions||[]).find(c=>normName(c.nom)==='expose') || {nom:'Exposé', responsable:'Dr Éric ZAGBEU'};
+  (db.membres||[]).forEach(m=>{
+    if(/responsable/i.test(m.role||'') || normName(m.nom)===normName(comExpose.responsable)) return;
+    let e=(db.etudiants||[]).find(x=>x.id===m.etudiantId) || (db.etudiants||[]).find(x=>memePersonne(x.nom,m.nom));
+    if(!e){
+      const id='st-m-'+m.id;
+      if(db.tombstones[id]) return;
+      e={id, nom:m.nom, commission:comExpose.nom, responsable:comExpose.responsable, classe:'', source:'membre'};
+      db.etudiants.push(e);
+    }
+    m.etudiantId=e.id;
+  });
+  // 2) Modérateurs de classe : repris des séances et des exposés déjà enregistrés
+  const pris=(db.moderateurs||[]).map(x=>String(x.code));
+  const ajoutModo=(nom,tel,classe)=>{
+    nom=String(nom||'').trim(); if(!nom) return;
+    let md=db.moderateurs.find(x=>cleNom(x.nom)===cleNom(nom));
+    if(!md){ const id='md-'+slug(nom); if(db.tombstones[id]) return; md={id, nom, tel:tel||'', code:codeAleatoire(pris), classes:[]}; pris.push(md.code); db.moderateurs.push(md); }
+    if(tel && !md.tel) md.tel=tel;
+    if(classe && !md.classes.includes(classe)) md.classes.push(classe);
+  };
+  (db.sessions||[]).forEach(s=>{ [s.moderateur1,s.moderateur2].forEach(x=>{ if(x) ajoutModo(x.nom,x.tel,s.classe); }); });
+  (db.expositions||[]).forEach(x=>ajoutModo(x.moderateur,'',x.classe));
+  // 3) Membres du jury : repris des sorties (président, jury 1, jury 2)
+  const prisJ=(db.jury||[]).map(x=>String(x.code));
+  (db.sorties||[]).forEach(v=>{ ['president','jury1','jury2'].forEach(k=>{ const p=(v.postes||{})[k]; if(!p||!p.nom) return;
+    if(db.jury.some(j=>cleNom(j.nom)===cleNom(p.nom))) return; const id='jy-'+slug(p.nom); if(db.tombstones[id]) return;
+    const c=codeAleatoire(prisJ); prisJ.push(c); db.jury.push({id, nom:p.nom, tel:p.tel||'', code:c}); }); });
+  // 4) Mise en cohérence des rapports avec la liste des étudiants
+  corrigerCoherence(db);
+}
+
+/* ---------- Cohérence : chaque rapport est rattaché à un étudiant de la liste, dans la commission
+   de son responsable ; les taux se calculent sur les étudiants sous la charge de chaque responsable. ---------- */
+function commissionParResponsable(db, respNom){
+  if(!respNom) return null;
+  const l=(db.commissions||[]).filter(c=>c.responsable && normName(c.responsable)===normName(respNom));
+  return l.length===1 ? l[0] : null;
+}
+function analyseCoherence(db){
+  db=db||DB;
+  const out=[];
+  const parNom=new Map(); (db.etudiants||[]).forEach(e=>parNom.set(cleNom(e.nom),e));
+  const comNom=n=>(db.commissions||[]).find(c=>c.nom===n);
+  (db.rapports||[]).forEach(r=>{
+    const respNom = r.responsable && (r.responsable.nom||r.responsable);
+    const comResp = commissionParResponsable(db, respNom);
+    let e = parNom.get(cleNom(r.etudiantNom));
+    if(!e){
+      const com = comResp ? comResp.nom : (comNom(r.commission) ? r.commission : '');
+      out.push({type:'hors_liste', id:r.id, texte:`${r.etudiantNom} a un rapport (${r.numero}) mais n'est pas dans la liste des étudiants`, action: com ? `l'ajouter à la commission ${com}` : 'à rattacher à une commission', commission:com});
+      return;
+    }
+    const cible = comResp ? comResp.nom : e.commission;
+    if(e.commission!==cible) out.push({type:'commission_etudiant', id:r.id, etudiantId:e.id, vers:cible, texte:`${e.nom} est dans « ${e.commission||'—'} » mais son rapport désigne ${respNom} (${cible})`, action:`le placer dans ${cible}`});
+    if(r.commission!==cible) out.push({type:'commission_rapport', id:r.id, vers:cible, texte:`Rapport ${r.numero} de ${e.nom} : commission « ${r.commission||'—'} » au lieu de « ${cible} »`, action:`corriger en ${cible}`});
+    const c=comNom(cible), attendu=c?c.responsable:'';
+    if(attendu && !comResp && normName(respNom||'')!==normName(attendu)) out.push({type:'responsable', id:r.id, vers:attendu, texte:`Rapport ${r.numero} de ${e.nom} : responsable « ${respNom||'—'} » au lieu de « ${attendu} »`, action:`indiquer ${attendu}`});
+  });
+  return out;
+}
+function corrigerCoherence(db){
+  db=db||DB; let n=0;
+  analyseCoherence(db).forEach(p=>{
+    const r=(db.rapports||[]).find(x=>x.id===p.id); if(!r) return;
+    if(p.type==='hors_liste' && p.commission){
+      if((db.etudiants||[]).some(e=>cleNom(e.nom)===cleNom(r.etudiantNom))) return;
+      const c=(db.commissions||[]).find(x=>x.nom===p.commission);
+      db.etudiants.push({id:'st-r-'+r.id, nom:r.etudiantNom, commission:p.commission, responsable:c?c.responsable:'', classe:'', source:'rapport'});
+      r.commission=p.commission; n++;
+    }
+    if(p.type==='commission_etudiant'){ const e=db.etudiants.find(x=>x.id===p.etudiantId); const c=(db.commissions||[]).find(x=>x.nom===p.vers); if(e){ e.commission=p.vers; e.responsable=c?c.responsable:e.responsable; n++; } }
+    if(p.type==='commission_rapport'){ r.commission=p.vers; n++; }
+    if(p.type==='responsable'){ r.responsable = Object.assign({tel:''}, typeof r.responsable==='object'?r.responsable:{}, {nom:p.vers}); n++; }
+  });
+  return n;
+}
+// Étudiants sous la charge du responsable d'une commission, et taux de rapports définitifs (jamais plus de 100 %)
+function sousCharge(commissionNom){ return (DB.etudiants||[]).filter(e=>e.commission===commissionNom); }
+function tauxDefinitifs(commissionNom){
+  const liste=sousCharge(commissionNom);
+  const defs=new Set((DB.rapports||[]).filter(r=>r.statut==='definitif').map(r=>cleNom(r.etudiantNom)));
+  const n=liste.filter(e=>defs.has(cleNom(e.nom))).length;
+  return {total:liste.length, n, pct: liste.length ? Math.round(n/liste.length*100) : null, manquants: liste.filter(e=>!defs.has(cleNom(e.nom)))};
+}
+
+/* ---------- Modérateurs : registre et notifications de leur classe ---------- */
+function ajouterModerateur(nom, tel, classe){
+  nom=String(nom||'').trim(); if(!nom) return null;
+  let md=(DB.moderateurs||[]).find(x=>cleNom(x.nom)===cleNom(nom));
+  if(!md){
+    const id='md-'+slug(nom);
+    if(DB.tombstones && DB.tombstones[id]) return null;
+    md={id, nom, tel:tel||'', code:codeAleatoire(DB.moderateurs.map(x=>String(x.code))), classes:[]};
+    DB.moderateurs.push(md);
+  }
+  if(tel && !md.tel) md.tel=tel;
+  if(classe && !(md.classes||[]).includes(classe)) md.classes=(md.classes||[]).concat([classe]);
+  return md;
+}
+// Modérateurs concernés par une classe (+ modérateur nommé sur le document), sans doublons
+function moderateursDe(classe, autres){
+  const l=(DB.moderateurs||[]).filter(m=>classe && (m.classes||[]).includes(classe)).map(m=>({nom:m.nom, tel:m.tel}));
+  (autres||[]).forEach(a=>{ if(a && a.nom) l.push({nom:a.nom, tel:a.tel||''}); });
+  return uniq(l, x=>cleNom(x.nom));
+}
+function notifierModerateurs(classe, autres, texte, titre){
+  moderateursDe(classe, autres).forEach(m=>sendMessage(m.nom, texte, m.tel, {titre:titre||'Ma classe', type:'moderateur'}));
+}
+
+/* ---------- Jury : registre et dossier complet d'un étudiant ---------- */
+function ajouterJury(nom, tel){
+  nom=String(nom||'').trim(); if(!nom) return null;
+  let j=(DB.jury||[]).find(x=>cleNom(x.nom)===cleNom(nom));
+  if(!j){ const id='jy-'+slug(nom); if(DB.tombstones && DB.tombstones[id]) return null;
+    j={id, nom, tel:tel||'', code:codeAleatoire(DB.jury.map(x=>String(x.code)))}; DB.jury.push(j); }
+  if(tel && !j.tel) j.tel=tel;
+  return j;
+}
+// Tous les documents d'un étudiant (exposés + rapports), du plus ancien au plus récent, avec les messages reçus
+function dossierEtudiant(nom){
+  const k=cleNom(nom);
+  const docs=[].concat(
+    (DB.expositions||[]).filter(x=>cleNom(x.etudiantNom)===k).map(x=>Object.assign({type:'Exposé'},x)),
+    (DB.rapports||[]).filter(x=>cleNom(x.etudiantNom)===k).map(x=>Object.assign({type:'Rapport de stage'},x))
+  ).sort((a,b)=>(a.tsDepot||0)-(b.tsDepot||0));
+  const msgs=(DB.messages||[]).filter(m=>(!m.cible||m.cible==='personne') && cleNom(m.nom)===k).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const fiche=(DB.etudiants||[]).find(e=>cleNom(e.nom)===k)||null;
+  return {nom, fiche, docs, msgs};
+}
+// Constats automatiques pour le jury : ce que l'étudiant peut affirmer et ce que la base montre réellement
+function constatsDossier(d){
+  const out=[];
+  const ex=d.docs.filter(x=>x.type==='Exposé');
+  if(!d.docs.length) out.push(['ko','Aucun document déposé à la commission']);
+  ex.forEach(x=>{
+    if(x.statut==='depose') out.push(['ko',`${x.numero} (${x.phase||''}) : déposé le ${frDate(x.dateDepot)}, jamais pris en correction`]);
+    if(x.statut==='en_correction') out.push(['wa',`${x.numero} : en cours de correction par ${x.correcteur||'—'} — pas encore d'observations envoyées`]);
+    if((x.statut==='corrige_complet'||x.statut==='corrige_partiel') && !x.dateRetrait) out.push(['wa',`${x.numero} : corrigé le ${frDate(x.dateCorrection)} mais l'étudiant ne l'a pas encore retiré (il ne peut pas avoir vu les corrections sur papier)`]);
+    if(x.statut==='corrige_partiel') out.push(['wa',`${x.numero} : correction PARTIELLE seulement`]);
+    if((x.statut==='corrige_complet'||x.statut==='corrige_partiel'||x.statut==='retire') && !x.commentaire) out.push(['in',`${x.numero} : corrigé par ${x.correcteur||'—'} sans observation écrite`]);
+  });
+  const corriges=ex.filter(x=>x.dateCorrection);
+  if(corriges.length){
+    const der=corriges[corriges.length-1];
+    const apres=ex.filter(x=>(x.tsDepot||0)>(der.tsDepot||0));
+    if(!apres.length) out.push(['in',`Aucune nouvelle version déposée après la dernière correction (${der.numero}) : la commission n'a pas pu vérifier que les observations ont été prises en compte`]);
+  }
+  if(d.docs.some(x=>x.type==='Rapport de stage' && x.statut==='definitif')) out.push(['ok','Rapport de stage définitif enregistré']);
+  if(!out.length) out.push(['ok','Dossier sans anomalie']);
+  return out;
+}
+/* ---------- Accès : modérateurs et jury (nom + code), étudiants (code personnel Suivi) ---------- */
+function verifierCode(coll, nom, code){
+  const p=(DB[coll]||[]).find(x=>cleNom(x.nom)===cleNom(nom));
+  return p && String(p.code)===String(code).trim() ? p : null;
+}
+function hashPin(nom, pin){ let h=2166136261; const t='CE|'+cleNom(nom)+'|'+String(pin); for(let i=0;i<t.length;i++){ h^=t.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h.toString(16); }
+function accesDe(nom){ return (DB.acces||[]).find(a=>cleNom(a.nom)===cleNom(nom)); }
+function definirPin(nom, pin){ const id='ac-'+slug(nom); let a=DB.acces.find(x=>x.id===id); if(!a){ a={id, nom}; DB.acces.push(a); } a.pin=hashPin(nom,pin); a.date=todayStr(); return a; }
+
+/* ---------- DISCUSSIONS (avec n'importe qui) + justificatifs ---------- */
+const ADMIN_NOM='Administration';
+function filKey(a,b){ return [cleNom(a),cleNom(b)].sort().join('~'); }
+function envoyerChat(de, a, texte, pieces, extra){
+  extra=extra||{};
+  const c=Object.assign({id:nid(), de, a, fil:filKey(de,a), texte:texte||'', pieces:pieces||[], date:todayStr(), heure:nowTimeStr(), ts:Date.now(), lu:false}, extra);
+  if(c.justificatif){ c.statut='en_attente'; c.decision=''; }
+  DB.chats.push(c);
+  return c;
+}
+function filsDe(nom){
+  const k=cleNom(nom), map=new Map();
+  (DB.chats||[]).forEach(c=>{
+    const moiDe=cleNom(c.de)===k, moiA=cleNom(c.a)===k; if(!moiDe && !moiA) return;
+    const autre=moiDe?c.a:c.de, key=cleNom(autre);
+    const f=map.get(key)||{autre, dernier:null, nonLus:0, total:0};
+    f.total++; if(!f.dernier || c.ts>f.dernier.ts) f.dernier=c;
+    if(moiA && !c.lu) f.nonLus++;
+    map.set(key,f);
+  });
+  return Array.from(map.values()).sort((x,y)=>y.dernier.ts-x.dernier.ts);
+}
+function messagesFil(a,b){ const f=filKey(a,b); return (DB.chats||[]).filter(c=>c.fil===f).sort((x,y)=>x.ts-y.ts); }
+function marquerFilLu(moi, autre){ let n=0; messagesFil(moi,autre).forEach(c=>{ if(cleNom(c.a)===cleNom(moi) && !c.lu){ c.lu=true; n++; } }); return n; }
+function chatsNonLus(nom){ return (DB.chats||[]).filter(c=>cleNom(c.a)===cleNom(nom) && !c.lu).length; }
+// Annuaire : toutes les personnes avec qui on peut discuter (sans doublons)
+function annuaire(){
+  const l=[{nom:ADMIN_NOM, role:'Administration de la commission'}];
+  (DB.commissions||[]).forEach(c=>{ if(c.responsable && !/eglise fille|non communique/.test(normName(c.responsable))) l.push({nom:c.responsable, role:'Responsable — commission '+c.nom}); });
+  (DB.membres||[]).forEach(m=>l.push({nom:m.nom, role:m.role||'Membre de la commission'}));
+  (DB.moderateurs||[]).forEach(m=>l.push({nom:m.nom, role:'Modérateur — '+((m.classes||[]).join(', ')||'classe')}));
+  (DB.jury||[]).forEach(j=>l.push({nom:j.nom, role:'Membre du jury'}));
+  (DB.etudiants||[]).forEach(e=>l.push({nom:e.nom, role:'Étudiant — '+(e.commission||'')}));
+  return uniq(l, x=>cleNom(x.nom));
+}
+// Envoi d'une pièce jointe / d'un justificatif au serveur (photo réduite automatiquement, PDF jusqu'à 6 Mo)
+function lireFichier(file){ return new Promise((ok,ko)=>{ const r=new FileReader(); r.onerror=()=>ko(r.error); r.onload=e=>ok(e.target.result); r.readAsDataURL(file); }); }
+async function envoyerFichier(file){
+  let type=file.type||'', data;
+  if(/^image\//.test(type)){ data=await compressImage(file,1600,0.78); type='image/jpeg'; }
+  else {
+    if(!/pdf|msword|officedocument|text\/plain/.test(type)) throw new Error('Formats acceptés : photo, PDF, Word ou texte.');
+    if(file.size>6*1024*1024) throw new Error('Fichier trop volumineux (6 Mo maximum).');
+    data=await lireFichier(file);
+  }
+  let r;
+  try{ r=await fetch('/api/fichier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nom:file.name, type, data})}); }
+  catch(e){ throw new Error("Serveur injoignable : la pièce jointe n'a pas pu être envoyée."); }
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok || !j.ok) throw new Error(j.error||'Envoi impossible');
+  return {url:j.url, nom:file.name, type, taille:j.taille};
+}
+
 /* v3 : membres officiels de la commission (les 4 membres d'exemple sont retirés) */
 function ensureMembresV3(db){
   if(!db.membres) db.membres=[];
@@ -444,7 +677,7 @@ function commissionResponsable(nomCommission){ const c=(DB.commissions||[]).find
    qui les FUSIONNE fiche par fiche : la tablette, le PC et les téléphones peuvent enregistrer
    en même temps sans s'écraser. Sans serveur : mode hors-ligne sur un seul appareil. */
 // Collections fusionnées fiche par fiche (par id)
-const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes'];
+const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes','moderateurs','jury','chats','acces'];
 // Paramètres fusionnés en bloc (la modification la plus récente gagne)
 const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode','reglages'];
 
@@ -535,7 +768,7 @@ function adoptRemote(remote){
   applyDefaults(DB); applyReglages();
   takeSnapshot();
   const changed=ensureOfficialData(DB);
-  if(changed){ stampChanges(); DIRTY=true; }   // base ancienne version : la mise à jour est renvoyée au serveur
+  if(changed){ stampChanges(); DIRTY=true; window._resync=true; }   // base ancienne version : la mise à jour est renvoyée au serveur tout de suite
   takeSnapshot();
   writeLocal();
   const sig=JSON.stringify(DB);
@@ -656,7 +889,7 @@ function sendMessage(nom, texte, tel, extra){
   return m;
 }
 function sendAnnonce(cible, texte, titre, commission, auteur){
-  const lbl = {tous:'Tout le monde', etudiants:'Tous les étudiants', membres:'Tous les membres', commission:'Commission '+(commission||'')}[cible]||'Tout le monde';
+  const lbl = {tous:'Tout le monde', etudiants:'Tous les étudiants', membres:'Tous les membres', moderateurs:'Tous les modérateurs', jury:'Tous les membres du jury', commission:'Commission '+(commission||'')}[cible]||'Tout le monde';
   const m={id:nid(), nom:lbl, tel:'', titre:titre||'Annonce', texte, date:todayStr(), heure:nowTimeStr(), ts:Date.now(), lu:false, luPar:[], cible, commission:commission||'', type:'annonce', auteur:auteur||''};
   DB.messages.push(m);
   return m;
@@ -671,6 +904,8 @@ function messageConcerne(m, nom){
   if(m.cible==='etudiants') return !!etu;
   if(m.cible==='membres') return !!mem;
   if(m.cible==='commission') return !!(etu && etu.commission===m.commission);
+  if(m.cible==='moderateurs') return (DB.moderateurs||[]).some(x=>normName(x.nom)===n);
+  if(m.cible==='jury') return (DB.jury||[]).some(x=>normName(x.nom)===n);
   return false;
 }
 function messageLu(m, nom){ return (!m.cible||m.cible==='personne') ? !!m.lu : (m.luPar||[]).includes(normName(nom)); }
@@ -705,6 +940,7 @@ function connectStream(){
   ES.onopen=()=>{ SERVER_CONNECTE=true; updateSyncBadge(); };
   ES.addEventListener('maj', ()=>{ syncNow(); });
   ES.addEventListener('notif', e=>{ try{ const m=JSON.parse(e.data); if(typeof window.onNotif==='function') window.onNotif(m); }catch(x){} });
+  ES.addEventListener('chat', e=>{ try{ const c=JSON.parse(e.data); if(typeof window.onChat==='function') window.onChat(c); }catch(x){} });
   ES.addEventListener('activite', e=>{ try{ const a=JSON.parse(e.data); if(typeof window.onActivite==='function') window.onActivite(a); }catch(x){} });
 }
 // Son + vibration (comme le modèle)
@@ -749,7 +985,7 @@ async function activerPush(nom){
   const cle=await (await fetch('/api/push/cle')).json();
   let sub=await reg.pushManager.getSubscription();
   if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(cle.publicKey)});
-  const r=await fetch('/api/push/abonner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nom, subscription:sub.toJSON()})});
+  const r=await fetch('/api/push/abonner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nom, page:(location.pathname.split('/').pop()||'suivi.html'), subscription:sub.toJSON()})});
   if(!r.ok) throw new Error("Le serveur n'a pas accepté l'abonnement.");
   return true;
 }

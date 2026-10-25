@@ -91,6 +91,8 @@
         <button id="ad-tab-config" onclick="adSwitch('config')">Configuration</button>
         <button id="ad-tab-seances" onclick="adSwitch('seances')">Séances &amp; Sorties</button>
         <button id="ad-tab-notif" onclick="adSwitch('notif')">Notifications</button>
+        <button id="ad-tab-disc" onclick="adSwitch('disc')">Discussions <span class="count-pill hidden" id="ad-disc-n">0</span></button>
+        <button id="ad-tab-acces" onclick="adSwitch('acces')">Modérateurs &amp; Jury</button>
         <button id="ad-tab-export" onclick="adSwitch('export')">Exports Word / Excel</button>
       </div>
 
@@ -167,7 +169,11 @@
             <button class="bp" onclick="runExport('definitifs','print')">Imprimer / PDF</button>
           </div>
         </div></div>
-        <div class="card"><div class="card-h">Rapports définitifs par commission</div><div class="card-b" id="ad-r-commission"></div></div>
+        <div class="card"><div class="card-h">Cohérence des données</div><div class="card-b" id="ad-r-coherence"></div></div>
+        <div class="card"><div class="card-h">Rapports définitifs par commission (calculés sur les étudiants sous la charge de chaque responsable)</div><div class="card-b" id="ad-r-commission"></div></div>
+        <div class="card"><div class="card-h">Sous la charge de chaque responsable</div><div class="card-b">
+          <div class="fg"><select id="adr-charge-com" onchange="renderSousCharge()"></select></div>
+          <div id="ad-r-charge"></div></div></div>
         <div class="card"><div class="card-h">Suivi des rapports de stage</div>
           <div class="filters">
             <input type="text" id="adr-q" placeholder="Nom ou numéro..." oninput="renderAdDocs('rapport')">
@@ -255,7 +261,7 @@
           <div id="ad-co-list"></div>
           <div class="fg-row" style="margin-top:10px;">
             <input type="text" id="ad-co-new-nom" placeholder="Nom de la commission...">
-            <input type="number" id="ad-co-new-total" placeholder="Total attendu" min="0">
+            
           </div>
           <button class="btn-sm btn-g" style="width:100%;margin-top:8px;" onclick="addCommission()">+ Ajouter la commission</button>
         </div></div>
@@ -370,6 +376,7 @@
                 <option value="personne">Une personne</option><option value="tous">Tout le monde</option>
                 <option value="etudiants">Tous les étudiants</option><option value="membres">Tous les membres de la commission</option>
                 <option value="commission">Une commission</option>
+                <option value="moderateurs">Tous les modérateurs de classe</option><option value="jury">Tous les membres du jury</option>
               </select></div>
             <div class="fg" id="nt-nom-wrap"><label>Nom</label><input type="text" id="nt-nom" list="nt-personnes" placeholder="Tapez un nom..."></div>
             <div class="fg hidden" id="nt-com-wrap"><label>Commission</label><select id="nt-com"></select></div>
@@ -389,7 +396,7 @@
               <div class="fg"><label>Destinataire</label>
                 <select id="pg-cible" onchange="ntCibleChange('pg')">
                   <option value="tous">Tout le monde</option><option value="etudiants">Tous les étudiants</option>
-                  <option value="membres">Tous les membres de la commission</option><option value="commission">Une commission</option><option value="personne">Une personne</option>
+                  <option value="membres">Tous les membres de la commission</option><option value="commission">Une commission</option><option value="moderateurs">Tous les modérateurs de classe</option><option value="jury">Tous les membres du jury</option><option value="personne">Une personne</option>
                 </select></div>
               <div class="fg hidden" id="pg-nom-wrap"><label>Nom</label><input type="text" id="pg-nom" list="nt-personnes"></div>
               <div class="fg hidden" id="pg-com-wrap"><label>Commission</label><select id="pg-com"></select></div>
@@ -415,6 +422,46 @@
         </div></div>
       </div>
 
+      <!-- DISCUSSIONS -->
+      <div id="ad-disc" class="hidden">
+        <div class="dash-kpis" id="dc-kpis"></div>
+        <div class="card"><div class="card-h">Justificatifs en attente de décision</div><div id="dc-justif"></div></div>
+        <div class="card"><div class="card-h">Demandes des modérateurs et signalements du jury</div><div id="dc-demandes"></div></div>
+        <div id="dc-zone"></div>
+      </div>
+
+      <!-- MODÉRATEURS & JURY -->
+      <div id="ad-acces" class="hidden">
+        <div class="card"><div class="card-h">Modérateurs de classe</div><div class="card-b">
+          <div class="hint" style="margin-bottom:10px;">Chaque modérateur se connecte sur <b>moderateur.html</b> avec son nom et son code. Il reçoit en direct l'évolution des exposés de ses classes et la présentation de la méthodologie. Les modérateurs saisis sur les séances et les dépôts d'exposés sont ajoutés automatiquement (sans doublon).</div>
+          <div class="sub-card"><h4>Ajouter un modérateur</h4>
+            <div class="fg-row">
+              <div class="fg"><label>Nom complet</label><input type="text" id="md-new-nom"></div>
+              <div class="fg"><label>Téléphone</label><input type="tel" id="md-new-tel"></div>
+            </div>
+            <div class="fg"><label>Classes</label><div class="mini-pills" id="md-new-classes"></div></div>
+            <button class="btn-sm btn-g" onclick="mdAjouter()">Ajouter le modérateur</button>
+          </div>
+          <div id="md-list"></div>
+        </div></div>
+        <div class="card"><div class="card-h">Membres du jury</div><div class="card-b">
+          <div class="hint" style="margin-bottom:10px;">Chaque membre du jury se connecte sur <b>jury.html</b> avec son nom et son code. Il voit tout : qui a corrigé, quand, et les observations réellement envoyées à chaque étudiant. Les jurys des sorties sont ajoutés automatiquement.</div>
+          <div class="sub-card"><h4>Ajouter un membre du jury</h4>
+            <div class="fg-row">
+              <div class="fg"><label>Nom complet</label><input type="text" id="jy-new-nom"></div>
+              <div class="fg"><label>Téléphone</label><input type="tel" id="jy-new-tel"></div>
+            </div>
+            <button class="btn-sm btn-g" onclick="jyAjouter()">Ajouter le membre du jury</button>
+          </div>
+          <div id="jy-list"></div>
+        </div></div>
+        <div class="card"><div class="card-h">Codes personnels du Suivi (étudiants)</div><div class="card-b">
+          <div class="hint" style="margin-bottom:10px;">Chaque étudiant choisit son code à la première connexion à l'application Suivi : il ne voit que ce qui le concerne. Si un étudiant oublie son code, réinitialisez-le ici : il en choisira un nouveau.</div>
+          <div class="srch-box"><input type="text" id="ac-q" placeholder="Rechercher un étudiant..." oninput="renderAcces()"></div>
+          <div id="ac-list"></div>
+        </div></div>
+      </div>
+
       <!-- EXPORT -->
       <div id="ad-export" class="hidden">
         <div class="card"><div class="card-b">
@@ -437,6 +484,7 @@
 
 <script src="export.js"></script>
 <script src="core.js"></script>
+<script src="discussion.js"></script>
 <script src="admin.js"></script>
 </body>
 </html>

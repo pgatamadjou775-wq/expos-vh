@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d3b2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jury VH">
+<link rel="manifest" href="manifest.json">
+<title>Espace Jury — Académie Vases d'Honneur</title>
+<link rel="stylesheet" href="core.css">
+</head>
+<body>
+
+<div class="screen on" id="s-home">
+  <div style="width:100%;">
+    <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
+    <div class="hero">
+      <div class="hero-badge">Académie Vases d'Honneur</div>
+      <div class="hero-title">ESPACE<br><b>MEMBRES DU JURY</b></div>
+      <div class="hero-clock" id="jy-qui">Commission Exposé</div>
+      <div class="sync-badge" style="margin-top:8px;"></div>
+    </div>
+
+    <div id="jy-login" class="scr-body" style="margin-top:-30px;position:relative;z-index:3;">
+      <div class="card"><div class="card-b">
+        <div class="fg"><label>Votre nom</label><input type="text" id="jy-nom" placeholder="Tapez votre nom puis choisissez-le" autocomplete="off" oninput="jyChercher()"></div>
+        <div class="pick-list hidden" id="jy-list" style="margin-bottom:12px;"></div>
+        <div class="fg"><label>Code personnel</label><input type="password" inputmode="numeric" id="jy-code" placeholder="••••" onkeydown="if(event.key==='Enter')jyConnexion()"></div>
+        <button class="btn btn-g" onclick="jyConnexion()">Accéder à l'espace jury</button>
+        <div class="hint" style="margin-top:10px;">Votre code vous est remis par l'administration de la commission exposé.</div>
+      </div></div>
+    </div>
+
+    <div class="tiles hidden" id="jy-menu">
+      <button class="tile tile-1" onclick="ouvrir('s-dos')"><div class="tile-t">Dossier d'un étudiant</div><div class="tile-s">Tout son parcours : dépôts, correcteurs, observations réellement envoyées</div></button>
+      <button class="tile tile-2" onclick="ouvrir('s-exp')"><div class="tile-t">Tous les exposés</div><div class="tile-s" id="t-exp">Qui a corrigé quoi, quand, avec quelles observations</div></button>
+      <button class="tile tile-3" onclick="ouvrir('s-rap')"><div class="tile-t">Rapports de stage</div><div class="tile-s" id="t-rap">Statut par étudiant et par commission</div></button>
+      <button class="tile tile-4" onclick="ouvrir('s-cor')"><div class="tile-t">Activité des correcteurs</div><div class="tile-s">Nombre de corrections, délais, observations</div></button>
+      <button class="tile tile-1" onclick="ouvrir('s-sor')"><div class="tile-t">Mes sorties</div><div class="tile-s" id="t-sor">Sorties où je suis membre du jury</div></button>
+      <button class="tile tile-2" onclick="ouvrir('s-notif')"><div class="tile-t">Mes notifications <span class="count-pill hidden" id="c-notif">0</span></div><div class="tile-s">Annonces et messages de l'administration</div></button>
+      <button class="tile tile-3" onclick="ouvrir('s-disc')"><div class="tile-t">Discussion <span class="count-pill hidden" id="c-disc">0</span></div><div class="tile-s">Échanger avec l'administration ou toute autre personne</div></button>
+      <div class="home-foot"><button class="btn-sm btn-ghost" onclick="jyDeconnexion()">Se déconnecter</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- DOSSIER -->
+<div class="screen" id="s-dos">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Dossier d'un étudiant</div></div><div class="scr-sub">Ce que la commission a réellement fait</div></div>
+  <div class="scr-body">
+    <div class="srch-box"><input type="text" id="dos-q" placeholder="Nom de l'étudiant (sans se soucier des accents)..." autocomplete="off" oninput="dosChercher()"></div>
+    <div class="pick-list hidden" id="dos-list" style="margin-bottom:12px;"></div>
+    <div id="dos-zone"></div>
+  </div>
+</div>
+
+<!-- EXPOSÉS -->
+<div class="screen" id="s-exp">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Tous les exposés</div></div><div class="scr-sub">Mis à jour en direct</div></div>
+  <div class="scr-body">
+    <div class="fg-row">
+      <div class="fg"><label>Classe</label><select id="exp-classe" onchange="rendreExposes()"></select></div>
+      <div class="fg"><label>Statut</label><select id="exp-statut" onchange="rendreExposes()">
+        <option value="">Tous</option><option value="depose">Déposé — à corriger</option><option value="en_correction">En correction</option>
+        <option value="corrige_complet">Corrigé complet</option><option value="corrige_partiel">Corrigé partiel</option><option value="retire">Retiré</option><option value="sansobs">Corrigé sans observation</option></select></div>
+    </div>
+    <div class="srch-box"><input type="text" id="exp-q" placeholder="Étudiant, numéro, correcteur, modérateur..." oninput="rendreExposes()"></div>
+    <div class="mini-pills" id="exp-stats" style="margin-bottom:12px;"></div>
+    <div id="exp-list"></div>
+  </div>
+</div>
+
+<!-- RAPPORTS -->
+<div class="screen" id="s-rap">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Rapports de stage</div></div><div class="scr-sub">Étudiants sous la charge de chaque responsable</div></div>
+  <div class="scr-body">
+    <div class="fg"><label>Commission</label><select id="rap-com" onchange="rendreRapports()"></select></div>
+    <div class="srch-box"><input type="text" id="rap-q" placeholder="Rechercher un étudiant..." oninput="rendreRapports()"></div>
+    <div id="rap-list"></div>
+  </div>
+</div>
+
+<!-- CORRECTEURS -->
+<div class="screen" id="s-cor">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Activité des correcteurs</div></div><div class="scr-sub">Exposés et rapports</div></div>
+  <div class="scr-body"><div id="cor-list"></div></div>
+</div>
+
+<!-- SORTIES -->
+<div class="screen" id="s-sor">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Mes sorties</div></div><div class="scr-sub">Églises filles</div></div>
+  <div class="scr-body"><div id="sor-list"></div></div>
+</div>
+
+<!-- NOTIFICATIONS -->
+<div class="screen" id="s-notif">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Mes notifications</div></div><div class="scr-sub">Annonces et messages</div></div>
+  <div class="scr-body">
+    <div class="card"><div class="card-b"><div class="note-txt" id="push-etat"></div><button class="btn btn-g" id="push-btn" onclick="jyPush()">Activer les notifications</button></div></div>
+    <div style="text-align:right;margin-bottom:8px;"><button class="btn-sm btn-ghost" onclick="toutLu()">Tout marquer comme lu</button></div>
+    <div class="card"><div id="notif-list"></div></div>
+  </div>
+</div>
+
+<!-- DISCUSSION -->
+<div class="screen" id="s-disc">
+  <div class="scr-head"><div class="scr-head-top"><button class="back-pill" onclick="goHome()">Retour</button><div class="scr-title">Discussion</div></div><div class="scr-sub">Messages, pièces jointes et justificatifs</div></div>
+  <div class="scr-body"><div id="disc-zone"></div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="core.js"></script>
+<script src="discussion.js"></script>
+<script src="jury.js"></script>
+</body>
+</html>

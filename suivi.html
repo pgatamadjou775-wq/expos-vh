@@ -29,6 +29,10 @@
         <div class="tile-t">Mon suivi <span class="count-pill hidden" id="home-unread">0</span></div>
         <div class="tile-s" id="home-moi">Statuts de mes dépôts + notifications + remarques du correcteur</div>
       </button>
+      <button class="tile tile-3" onclick="openDiscussion()" style="grid-column:span 2;">
+        <div class="tile-t">Discussion <span class="count-pill hidden" id="home-chat">0</span></div>
+        <div class="tile-s">Écrire à l'administration ou à qui vous voulez, envoyer un justificatif</div>
+      </button>
       <button class="tile tile-2" onclick="openBibliotheque()" style="grid-column:span 2;">
         <div class="tile-t">Source Vases d'Honneur</div>
         <div class="tile-s">Livres et sources autorisés pour mes recherches, par classe</div>
@@ -55,6 +59,13 @@
       <div class="fg"><label>Qui êtes-vous ?</label><input type="text" id="su-s" placeholder="Tapez votre nom puis choisissez-le" autocomplete="off" oninput="suChercher()"></div>
       <div class="pick-list hidden" id="su-list"></div>
       <div class="hint">Votre nom est retenu sur ce téléphone : vous recevrez vos notifications sans le retaper.</div>
+      <div id="su-pin" class="hidden" style="margin-top:12px;">
+        <div class="note-box partiel" style="margin-top:0;"><div class="note-txt" id="su-pin-txt"></div></div>
+        <div class="fg"><label id="su-pin-lbl">Code personnel (4 chiffres)</label><input type="password" inputmode="numeric" maxlength="6" id="su-pin1" placeholder="••••"></div>
+        <div class="fg hidden" id="su-pin2-wrap"><label>Confirmez le code</label><input type="password" inputmode="numeric" maxlength="6" id="su-pin2" placeholder="••••"></div>
+        <button class="btn btn-g" onclick="suValiderPin()">Valider</button>
+        <button class="btn btn-ghost" onclick="suAnnulerPin()">Ce n'est pas moi</button>
+      </div>
     </div></div>
 
     <!-- 2. Mon espace -->
@@ -78,6 +89,18 @@
   </div>
 </div>
 
+<!-- ================= DISCUSSION ================= -->
+<div class="screen" id="s-disc">
+  <div class="scr-head">
+    <div class="scr-head-top">
+      <button class="back-pill" onclick="goHome()">Retour</button>
+      <div class="scr-title">Discussion</div>
+    </div>
+    <div class="scr-sub">Messages, pièces jointes et justificatifs</div>
+  </div>
+  <div class="scr-body"><div id="disc-zone"></div></div>
+</div>
+
 <!-- ================= BIBLIOTHEQUE : SOURCE VASES D'HONNEUR ================= -->
 <div class="screen" id="s-biblio">
   <div class="scr-head">
@@ -96,6 +119,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="core.js"></script>
+<script src="discussion.js"></script>
 <script src="suivi.js"></script>
 </body>
 </html>

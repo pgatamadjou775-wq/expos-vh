@@ -16,21 +16,24 @@ function showAdmin(){
 let currentAdminTab='dashboard';
 function adSwitch(tab){
   currentAdminTab=tab;
-  ['dashboard','membres','expose','rapport','etudiants','config','seances','notif','export'].forEach(t=>{
+  ['dashboard','membres','expose','rapport','etudiants','config','seances','notif','disc','acces','export'].forEach(t=>{
     document.getElementById('ad-tab-'+t).classList.toggle('on', t===tab);
     document.getElementById('ad-'+t).classList.toggle('hidden', t!==tab);
   });
   if(tab==='dashboard') renderDashboard();
   if(tab==='membres'){ renderAdMembres(); renderAdMembresAlertes(); renderAdMembresBilan(); }
   if(tab==='expose'){ fillDocFilters('expose'); renderAdDocs('expose'); }
-  if(tab==='rapport'){ fillDocFilters('rapport'); renderAdDocs('rapport'); }
+  if(tab==='rapport'){ fillDocFilters('rapport'); renderAdDocs('rapport'); renderCoherence(); renderSousCharge(); }
   if(tab==='etudiants'){ renderAdEtudiants(true); renderDoublons('etudiants'); }
   if(tab==='notif') renderNotif();
   if(tab==='config'){ renderReglages(); renderDoublons('membres'); fillSelect('bib-new-classe',reglages().classes); fillSelect('med-new-classe',reglages().classes); fillSelect('quiz-new-classe',reglages().classes); fillSelect('bib-new-type',reglages().typesSource); }
   if(tab==='config'){ renderAdMembresManage(); renderAdCreneaux(); renderAdMotifs(); renderAdEglises(); renderAdCommissions(); renderAdBiblio(); renderAdMeditations(); renderAdQuiz(); }
   if(tab==='seances') fillSelect('se-classe', reglages().classes);
   if(tab==='seances'){ renderAdSeances(); renderAdSeancesAlertes(); renderEgliseStats(); fillSortieEgliseSelect(); renderAdSorties(); if(!document.querySelector('#se-themes-list .theme-row')) addThemeRow('se-themes-list'); }
+  if(tab==='disc') renderDiscussions();
+  if(tab==='acces'){ renderModerateurs(); renderJury(); renderAcces(); }
   if(tab==='export'){ fillExportSelectors(); renderExportList(); }
+  majBadgeDisc();
 }
 window.onRemoteUpdate = function(){
   updateSyncBadge();
@@ -39,6 +42,7 @@ window.onRemoteUpdate = function(){
   // ne pas effacer une saisie en cours (formulaires, PV, fiches membres...)
   const a=document.activeElement;
   if(a && main.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;
+  if(currentAdminTab==='disc'){ Discussion.apresSync(); renderDiscussionsCotes(); majBadgeDisc(); return; }
   adSwitch(currentAdminTab);
 };
 
@@ -193,15 +197,15 @@ function etudiantsSansDefinitif(){
   const defs=new Set(DB.rapports.filter(r=>r.statut==='definitif').map(r=>normName(r.etudiantNom)));
   return DB.etudiants.filter(e=>!defs.has(normName(e.nom)));
 }
-// Rapports : nombre de rapports DÉFINITIFS par commission comparé au total attendu
+// Rapports : nombre d'étudiants ayant un rapport DÉFINITIF parmi ceux sous la charge du responsable
+// (l'effectif est calculé à partir de la liste : le taux ne peut jamais dépasser 100 %)
 function commissionBreakdownRows(kind){
-  const data = kind==='expose' ? DB.expositions : DB.rapports;
   return DB.commissions.map(c=>{
-    const mine=data.filter(x=>x.commission===c.nom);
-    const n = kind==='rapport' ? mine.filter(x=>x.statut==='definitif').length : mine.length;
-    const total = c.totalAttendu || DB.etudiants.filter(e=>e.commission===c.nom).length;
-    const pct = total>0 ? Math.round((n/total)*100) : null;
-    return {nom:c.nom, responsable:c.responsable||'', total, n, pct};
+    const liste=sousCharge(c.nom);
+    if(kind==='rapport'){ const t=tauxDefinitifs(c.nom); return {nom:c.nom, responsable:c.responsable||'', total:t.total, n:t.n, pct:t.pct, manquants:t.manquants}; }
+    const noms=new Set(DB.expositions.map(x=>cleNom(x.etudiantNom)));
+    const n=liste.filter(e=>noms.has(cleNom(e.nom))).length;
+    return {nom:c.nom, responsable:c.responsable||'', total:liste.length, n, pct: liste.length?Math.round(n/liste.length*100):null};
   });
 }
 function renderCommissionBreakdown(kind){
@@ -209,8 +213,8 @@ function renderCommissionBreakdown(kind){
   const el=document.getElementById(id);
   const rows=commissionBreakdownRows(kind);
   const faibles = rows.filter(r=>r.pct!==null && r.pct<SEUIL_COMMISSION_FAIBLE);
-  el.innerHTML = (faibles.length ? `<div class="alert-banner">${faibles.map(r=>`Taux de rapports définitifs faible pour "${escapeHtml(r.nom)}" : ${r.n}/${r.total} (${r.pct}%) — grand écart avec le nombre attendu.`).join('<br>')}</div>` : '')
-    + (rows.length ? `<table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Total attendu</th><th>Définitifs</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td style="text-align:left;">${escapeHtml(r.responsable)}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%'+(r.pct<SEUIL_COMMISSION_FAIBLE?' ':''):'—'}</td></tr>`).join('')}</tbody></table>` : `<div class="empty">Aucune commission configurée</div>`);
+  el.innerHTML = (faibles.length ? `<div class="alert-banner">${faibles.map(r=>`Taux de rapports définitifs faible pour "${escapeHtml(r.nom)}" : ${r.n}/${r.total} (${r.pct}%) — étudiants sous sa charge sans rapport définitif.`).join('<br>')}</div>` : '')
+    + (rows.length ? `<table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Sous sa charge</th><th>Définitifs</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td style="text-align:left;">${escapeHtml(r.responsable)}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%'+(r.pct<SEUIL_COMMISSION_FAIBLE?' ':''):'—'}</td></tr>`).join('')}</tbody></table>` : `<div class="empty">Aucune commission configurée</div>`);
 }
 
 /* ================= CONFIGURATION : CRÉNEAUX ================= */
@@ -332,19 +336,18 @@ function renderAdCommissions(){
       <div style="flex:1;">
         <div class="li-name" style="font-size:13.5px;">${escapeHtml(c.nom)}</div>
         <div class="li-sub" style="margin-bottom:4px;">Responsable : <input type="text" value="${escapeHtml(c.responsable||'')}" placeholder="Nom du responsable (ou « Église fille »)" style="width:240px;padding:4px 6px;border:1px solid var(--LINE);border-radius:6px;" onchange="updateCommissionResponsable(${i}, this.value)"></div>
-        <div class="li-sub">Total attendu : <input type="number" min="0" value="${c.totalAttendu||0}" style="width:70px;padding:4px 6px;border:1px solid var(--LINE);border-radius:6px;" onchange="updateCommissionTotal(${i}, this.value)"></div>
+        <div class="li-sub">Sous sa charge : <b>${sousCharge(c.nom).length}</b> étudiant(s) — ${tauxDefinitifs(c.nom).n} rapport(s) définitif(s)</div>
       </div>
       <button class="btn-sm" style="background:var(--REDP);color:var(--RED);" onclick="removeCommission(${i})">Supprimer</button>
     </div>`).join('') : `<div class="empty">Aucune commission configurée</div>`;
 }
 function addCommission(){
   const nomInp=document.getElementById('ad-co-new-nom');
-  const totInp=document.getElementById('ad-co-new-total');
   const nom=nomInp.value.trim();
   if(!nom){ toast('Nom requis','ko'); return; }
   if(existeDeja(DB.commissions.map(c=>c.nom), nom)){ toast('Cette commission existe déjà','ko'); return; }
-  DB.commissions.push({id:nid(), nom, totalAttendu: parseInt(totInp.value)||0});
-  saveDB(); nomInp.value=''; totInp.value=''; renderAdCommissions();
+  DB.commissions.push({id:nid(), nom});
+  saveDB(); nomInp.value=''; renderAdCommissions();
   toast('Commission ajoutée','ok');
 }
 function updateCommissionTotal(i, val){
@@ -476,7 +479,8 @@ function signalerReprise(){
   // Informe les présentateurs et modérateurs assignés
   const vSe={classe, date:frDate(dateProgrammee), salle};
   presentateurs.forEach(p=>sendMessage(p.nom, modele('seancePresentateur',Object.assign({nom:p.nom},vSe)), p.tel, {titre:'Séance de méthodologie'}));
-  [session.moderateur1, session.moderateur2].filter(Boolean).forEach(mo=>sendMessage(mo.nom, modele('seanceModerateur',Object.assign({nom:mo.nom},vSe)), mo.tel, {titre:'Séance de méthodologie'}));
+  [session.moderateur1, session.moderateur2].filter(Boolean).forEach(mo=>{ ajouterModerateur(mo.nom, mo.tel, classe); sendMessage(mo.nom, modele('seanceModerateur',Object.assign({nom:mo.nom},vSe)), mo.tel, {titre:'Séance de méthodologie', type:'moderateur'}); });
+  notifierModerateurs(classe, [], modele('seanceModerateur',Object.assign({nom:''},vSe)).replace(/^\s*,?\s*/,''), 'Méthodologie — '+classe);
   saveDB();
   ['se-date-reprise','se-salle','se-pres1-nom','se-pres1-tel','se-pres2-nom','se-pres2-tel','se-mod1-nom','se-mod1-tel','se-mod2-nom','se-mod2-tel'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('se-themes-list').innerHTML=''; addThemeRow('se-themes-list');
@@ -521,8 +525,7 @@ function validerPresentation(id){
   if(!dateJet) return;
   s.statut='validee'; s.dateDepotPremierJet=dateJet; s.adminValide=true;
   const themesTxt = (s.themesProposes && s.themesProposes.length) ? s.themesProposes.join(', ') : 'aucun thème proposé pour le moment';
-  if(s.moderateur1) sendMessage(s.moderateur1.nom, `Compte-rendu reçu pour ${s.classe} (passage n°${s.numero}). Thèmes proposés : ${themesTxt}.`, s.moderateur1.tel);
-  if(s.moderateur2) sendMessage(s.moderateur2.nom, `Compte-rendu reçu pour ${s.classe} (passage n°${s.numero}). Thèmes proposés : ${themesTxt}.`, s.moderateur2.tel);
+  notifierModerateurs(s.classe, [s.moderateur1, s.moderateur2].filter(Boolean), modele('methodoValidee',{classe:s.classe, numero:s.numero, themes:themesTxt, date:frDate(dateJet)}), 'Méthodologie validée — '+s.classe);
   DB.etudiants.filter(e=>e.classe===s.classe).forEach(e=>{
     sendMessage(e.nom, `Suite à la présentation de la méthodologie, la date de dépôt de votre 1er jet d'exposé est fixée au ${dateJet}.`);
   });
@@ -574,6 +577,7 @@ function addSortie(){
     toast('Président du jury, Jury 1, Jury 2, Observateur 1 et Observateur 2 sont requis','ko'); return;
   }
   DB.sorties.push({id:nid(), eglise, date, postes, pv:'', statut:'programmee'});
+  ['president','jury1','jury2'].forEach(k=>{ if(postes[k]) ajouterJury(postes[k].nom, postes[k].tel); });
   POSTES_SORTIE.forEach(p=>{
     const assigne=postes[p.key];
     if(assigne) sendMessage(assigne.nom, modele('sortie',{nom:assigne.nom, date:frDate(date), lieu:eglise, poste:p.label}), assigne.tel, {titre:'Sortie programmée'});
@@ -649,7 +653,7 @@ function buildAnnualReportHTML(year){
   const totRapD=mRap.reduce((s,m)=>s+m.depose,0), totRapC=mRap.reduce((s,m)=>s+m.corrige,0);
   const totPres=mPres.reduce((s,m)=>s+m.pointages,0), totH=mPres.reduce((s,m)=>s+m.heures,0);
   const coRowsRap=commissionBreakdownRows('rapport');
-  const coTable = (rows,titre) => rows.length ? `<div class="rep-h2">${titre}</div><table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Total attendu</th><th>Définitifs</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td style="text-align:left;">${escapeHtml(r.responsable||'')}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%':'—'}</td></tr>`).join('')}</tbody></table>` : '';
+  const coTable = (rows,titre) => rows.length ? `<div class="rep-h2">${titre}</div><table class="rep-table"><thead><tr><th>Commission</th><th>Responsable</th><th>Sous sa charge</th><th>Définitifs</th><th>%</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="text-align:left;">${escapeHtml(r.nom)}</td><td style="text-align:left;">${escapeHtml(r.responsable||'')}</td><td>${r.total||'—'}</td><td>${r.n}</td><td>${r.pct!==null?r.pct+'%':'—'}</td></tr>`).join('')}</tbody></table>` : '';
   const membresRows = DB.membres.map(m=>{
     const mo=memberMonthStats(m.id);
     return `<tr><td style="text-align:left;">${escapeHtml(m.nom)}</td><td>${mo.nb}</td><td>${mo.heures.toFixed(1)}h</td><td>${escapeHtml(m.financier||'')}</td><td>${escapeHtml(m.spirituel||'')}</td></tr>`;
@@ -847,6 +851,7 @@ function modelMembres(){
     sheets:[{name:'Membres',title:'Membres de la Commission Exposé — codes personnels',columns:cols.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows}]};
 }
 const EXPORTS = [
+  {id:'acces', t:'Modérateurs de classe et membres du jury — codes', s:'Liste confidentielle : nom, classes, téléphone et code de connexion', m:()=>modelAcces()},
   {id:'membres', t:'Membres de la commission et codes personnels', s:'Liste confidentielle à imprimer pour remettre à chaque membre son code', m:()=>modelMembres()},
   {id:'definitifs', t:'Rapports de stage définitifs — par commission', s:'Synthèse, liste par commission avec les responsables, étudiants sans définitif', m:()=>modelDefinitifs()},
   {id:'suivi_rapports', t:'Suivi complet des rapports de stage', s:'Tous les dépôts : statuts, responsables, mandataires, correcteurs, dates', m:()=>modelSuivi('rapport')},
@@ -994,7 +999,12 @@ function dashboardStats(){
       ['Pointages ce mois',presMois.length,'g'],
       ['Membres à suivre (alertes)',alertesMembres,alertesMembres?'r':'n'],
       ['Messages non lus',DB.messages.filter(m=>!m.lu).length,'y'],
-      ['Sorties programmées',DB.sorties.filter(v=>v.statut!=='effectuee').length,'n']
+      ['Sorties programmées',DB.sorties.filter(v=>v.statut!=='effectuee').length,'n'],
+      ['Modérateurs de classe',(DB.moderateurs||[]).length,'n'],
+      ['Membres du jury',(DB.jury||[]).length,'n'],
+      ["Discussions non lues (Administration)",chatsNonLus(ADMIN_NOM),chatsNonLus(ADMIN_NOM)?'y':'n'],
+      ['Justificatifs en attente',(DB.chats||[]).filter(c=>c.justificatif&&c.statut==='en_attente').length,(DB.chats||[]).some(c=>c.justificatif&&c.statut==='en_attente')?'r':'n'],
+      ['Incohérences à corriger',analyseCoherence().length,analyseCoherence().length?'r':'g']
     ]};
 }
 function renderDashboard(){
@@ -1153,7 +1163,7 @@ const JOURS_LBL=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
 const CIBLE_LBL={personne:'Une personne',tous:'Tout le monde',etudiants:'Tous les étudiants',membres:'Tous les membres',commission:'Commission'};
 let PUSH_STATS=null;
 function personnesConnues(){
-  return uniq(DB.etudiants.map(e=>e.nom).concat(DB.membres.map(m=>m.nom)), cleNom).sort((a,b)=>a.localeCompare(b,'fr'));
+  return uniq(DB.etudiants.map(e=>e.nom).concat(DB.membres.map(m=>m.nom),(DB.moderateurs||[]).map(m=>m.nom),(DB.jury||[]).map(m=>m.nom)), cleNom).sort((a,b)=>a.localeCompare(b,'fr'));
 }
 function ntCibleChange(p){
   const c=document.getElementById(p+'-cible').value;
@@ -1187,7 +1197,7 @@ function ntEnvoyer(){
   if(cible==='personne'){
     const nom=document.getElementById('nt-nom').value.trim();
     if(!nom){ toast('Choisissez la personne','ko'); return; }
-    const mem=DB.membres.find(m=>cleNom(m.nom)===cleNom(nom));
+    const mem=[].concat(DB.membres,DB.moderateurs||[],DB.jury||[]).find(m=>cleNom(m.nom)===cleNom(nom));
     const ok=sendMessage(mem?mem.nom:nom, texte, mem?mem.tel:'', {titre, type:'manuel'});
     if(!ok){ toast('Ce message a déjà été envoyé à cette personne aujourd\'hui','ko'); return; }
   } else {
@@ -1275,3 +1285,126 @@ function majBoutonAlertes(){
   b.classList.toggle('hidden', !('Notification' in window) || Notification.permission!=='default');
 }
 majBoutonAlertes();
+
+
+/* ================= v6 : COHÉRENCE DES DONNÉES ================= */
+function renderCoherence(){
+  const el=document.getElementById('ad-r-coherence'); if(!el) return;
+  const l=analyseCoherence();
+  const lbl={hors_liste:'Absent de la liste',commission_etudiant:'Commission de l\'étudiant',commission_rapport:'Commission du rapport',responsable:'Responsable'};
+  el.innerHTML = l.length ? `<div class="alert-banner">${l.length} incohérence(s) : un rapport désigne un responsable, mais l'étudiant n'est pas sous sa charge (ou n'est pas dans la liste).</div>
+    <table class="rep-table"><thead><tr><th>Type</th><th>Constat</th><th>Correction proposée</th></tr></thead><tbody>${l.slice(0,200).map(p=>`<tr><td>${lbl[p.type]||p.type}</td><td style="text-align:left;">${escapeHtml(p.texte)}</td><td style="text-align:left;">${escapeHtml(p.action)}</td></tr>`).join('')}</tbody></table>
+    <button class="btn-sm btn-g" onclick="toutCorriger()">Tout corriger</button>`
+    : `<div class="hint">Tout est cohérent : chaque rapport est rattaché à un étudiant de la liste, placé sous la charge du responsable qu'il désigne. Les taux ne peuvent pas dépasser 100 %.</div>`;
+}
+function toutCorriger(){ const n=corrigerCoherence(DB); saveDB(); renderAdDocs('rapport'); renderCoherence(); renderSousCharge(); toast(n+' correction(s) appliquée(s)','ok'); }
+function renderSousCharge(){
+  const sel=document.getElementById('adr-charge-com'); if(!sel) return;
+  if(!sel.value) sel.dataset.v=(DB.commissions.find(c=>normName(c.nom)==='expose')||DB.commissions[0]||{}).nom||'';
+  fillSelect(sel, DB.commissions.map(c=>c.nom)); if(sel.dataset.v){ sel.value=sel.dataset.v; delete sel.dataset.v; }
+  const c=sel.value, t=tauxDefinitifs(c);
+  const defs=new Map(DB.rapports.filter(r=>r.statut==='definitif').map(r=>[cleNom(r.etudiantNom),r]));
+  document.getElementById('ad-r-charge').innerHTML=`<div class="mini-pills" style="margin-bottom:10px;"><span><b>${escapeHtml(commissionResponsable(c)||'—')}</b>responsable</span><span><b>${t.total}</b>sous sa charge</span><span><b>${t.n}</b>définitifs</span><span><b>${t.total-t.n}</b>manquants</span><span><b>${t.pct===null?'—':t.pct+' %'}</b>taux</span></div>
+    <table class="rep-table"><thead><tr><th>N°</th><th>Étudiant</th><th>Origine</th><th>Rapport définitif</th></tr></thead><tbody>${sousCharge(c).sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map((e,i)=>{ const r=defs.get(cleNom(e.nom)); return `<tr><td>${i+1}</td><td style="text-align:left;">${escapeHtml(e.nom)}</td><td>${e.source==='membre'?'Membre de la commission':e.source==='rapport'?'Ajouté depuis un rapport':'Liste officielle'}</td><td>${r?escapeHtml(r.numero):'<b style="color:var(--RED)">Manquant</b>'}</td></tr>`; }).join('')}</tbody></table>`;
+}
+
+/* ================= v6 : DISCUSSIONS (avec tout le monde) ================= */
+function majBadgeDisc(){ const el=document.getElementById('ad-disc-n'); if(!el) return; const n=chatsNonLus(ADMIN_NOM); el.textContent=n; el.classList.toggle('hidden',!n); }
+function renderDiscussions(){
+  renderDiscussionsCotes();
+  Discussion.monter('dc-zone', ADMIN_NOM, {admin:true, raccourcis:false, onChange:()=>{ majBadgeDisc(); renderDiscussionsCotes(); }});
+}
+function renderDiscussionsCotes(){
+  const C=DB.chats||[];
+  const att=C.filter(c=>c.justificatif && c.statut==='en_attente').sort((a,b)=>a.ts-b.ts);
+  const dem=C.filter(c=>c.demande && cleNom(c.a)===cleNom(ADMIN_NOM)).sort((a,b)=>b.ts-a.ts).slice(0,50);
+  document.getElementById('dc-kpis').innerHTML=[['Non lus',chatsNonLus(ADMIN_NOM),'y'],['Justificatifs en attente',att.length,att.length?'r':'n'],['Justificatifs acceptés',C.filter(c=>c.statut==='acceptee').length,'g'],['Demandes reçues',C.filter(c=>c.demande).length,'n'],['Conversations',filsDe(ADMIN_NOM).length,'n']].map(([l,v,c])=>`<div class="kpi kpi-${c}"><div class="kv">${v}</div><div class="kl">${l}</div></div>`).join('');
+  const ligne=(c,extra)=>`<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(c.de)}</div>${extra||''}</div>
+    <div class="li-sub">${c.demande?'<b>'+escapeHtml(c.demande)+'</b>'+(c.classe?' — '+escapeHtml(c.classe):'')+(c.dateSouhaitee?' — souhaitée le '+frDate(c.dateSouhaitee):'')+'<br>':''}${c.motif?'Motif : <b>'+escapeHtml(c.motif)+'</b><br>':''}${escapeHtml(c.texte||'')}${(c.pieces||[]).length?'<br>'+c.pieces.map(p=>`<a class="pill-link" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${escapeHtml(p.nom)}</a>`).join(' '):''}</div>
+    <div class="hint">${frDate(c.date)} à ${escapeHtml(c.heure||'')}</div>
+    <div class="actions"><button class="btn-xs b-ok" data-ouvrir="${escapeHtml(c.de)}">Ouvrir la discussion</button></div></div>`;
+  document.getElementById('dc-justif').innerHTML = att.length ? att.map(c=>ligne(c,'<span class="badge by">En attente</span>')).join('') : `<div class="empty">Aucun justificatif en attente</div>`;
+  document.getElementById('dc-demandes').innerHTML = dem.length ? dem.map(c=>ligne(c, c.lu?'<span class="badge bn">Lue</span>':'<span class="badge by">Nouvelle</span>')).join('') : `<div class="empty">Aucune demande</div>`;
+  document.querySelectorAll('#dc-justif [data-ouvrir], #dc-demandes [data-ouvrir]').forEach(b=>b.onclick=()=>{ Discussion.ouvrir(b.dataset.ouvrir); document.getElementById('dc-zone').scrollIntoView({behavior:'smooth'}); });
+}
+window.onChat = function(c){
+  const pourMoi=cleNom(c.a)===cleNom(ADMIN_NOM);
+  if(!DB.chats.some(x=>x.id===c.id)) DB.chats.push(c);
+  if(pourMoi){ ding(); bandeau('Message de '+c.de, (c.justificatif?'Justificatif : ':'')+(c.texte||'pièce jointe'), ()=>{ adSwitch('disc'); Discussion.ouvrir(c.de); }); notifSysteme('Message de '+c.de, c.texte||''); }
+  if(currentAdminTab==='disc'){ Discussion.surNouveau(c); renderDiscussionsCotes(); }
+  majBadgeDisc();
+};
+
+/* ================= v6 : MODÉRATEURS, JURY, ACCÈS SUIVI ================= */
+function mdClassesBox(){ const el=document.getElementById('md-new-classes'); if(el && !el.dataset.ok){ el.innerHTML=reglages().classes.map(c=>`<label><input type="checkbox" value="${escapeHtml(c)}"> ${escapeHtml(c)}</label>`).join(''); el.dataset.ok='1'; } }
+function mdAjouter(){
+  const nom=document.getElementById('md-new-nom').value.trim(), tel=document.getElementById('md-new-tel').value.trim();
+  if(!nom){ toast('Nom requis','ko'); return; }
+  if((DB.moderateurs||[]).some(m=>cleNom(m.nom)===cleNom(nom))){ toast('Ce modérateur existe déjà : modifiez ses classes ci-dessous','ko'); return; }
+  const cls=[...document.querySelectorAll('#md-new-classes input:checked')].map(i=>i.value);
+  const id='md-'+slug(nom); if(DB.tombstones[id]) delete DB.tombstones[id];
+  const md=ajouterModerateur(nom, tel, ''); if(!md){ toast('Ajout impossible','ko'); return; } md.classes=cls;
+  sendMessage(md.nom, `Vous êtes inscrit comme modérateur (${cls.join(', ')||'classe à préciser'}). Votre code de connexion à l'Espace Modérateurs : ${md.code}.`, md.tel, {titre:'Espace Modérateurs', type:'acces'});
+  saveDB(); document.getElementById('md-new-nom').value=''; document.getElementById('md-new-tel').value='';
+  document.querySelectorAll('#md-new-classes input').forEach(i=>i.checked=false);
+  renderModerateurs(); toast('Modérateur ajouté — code '+md.code,'ok');
+}
+function renderModerateurs(){
+  mdClassesBox();
+  const l=(DB.moderateurs||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  const cls=reglages().classes;
+  document.getElementById('md-list').innerHTML = l.length ? l.map(m=>{
+    const nEx=DB.expositions.filter(x=>(m.classes||[]).includes(x.classe)).length;
+    return `<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(m.nom)}</div><span class="badge bg">Code ${escapeHtml(m.code)}</span></div>
+    <div class="li-sub">Tél : <input class="inline-in" value="${escapeHtml(m.tel||'')}" onchange="mdMaj('${m.id}','tel',this.value)"> • ${nEx} exposé(s) dans ses classes</div>
+    <div class="mini-pills" style="margin-top:6px;">${uniq(cls.concat(m.classes||[])).map(c=>`<label><input type="checkbox" ${(m.classes||[]).includes(c)?'checked':''} onchange="mdClasse('${m.id}',${escapeHtml(JSON.stringify(c))},this.checked)"> ${escapeHtml(c)}</label>`).join('')}</div>
+    <div class="actions"><button class="btn-xs b-y" onclick="nouveauCode('moderateurs','${m.id}')">Nouveau code</button>${waLink(m.tel,'')?`<a class="btn-xs b-ok" style="text-decoration:none;" target="_blank" href="${waLink(m.tel,'Espace Modérateurs — Commission Exposé. Votre code : '+m.code)}">Envoyer le code par WhatsApp</a>`:''}<button class="btn-xs b-del" onclick="retirerAcces('moderateurs','${m.id}')">Retirer</button></div></div>`; }).join('') : `<div class="empty">Aucun modérateur enregistré</div>`;
+}
+function mdMaj(id,f,v){ const m=DB.moderateurs.find(x=>x.id===id); if(!m) return; m[f]=v.trim(); saveDB(); }
+function mdClasse(id,c,on){ const m=DB.moderateurs.find(x=>x.id===id); if(!m) return; m.classes=(m.classes||[]).filter(x=>x!==c); if(on) m.classes.push(c); saveDB(); renderModerateurs(); }
+function jyAjouter(){
+  const nom=document.getElementById('jy-new-nom').value.trim(), tel=document.getElementById('jy-new-tel').value.trim();
+  if(!nom){ toast('Nom requis','ko'); return; }
+  if((DB.jury||[]).some(m=>cleNom(m.nom)===cleNom(nom))){ toast('Cette personne est déjà membre du jury','ko'); return; }
+  const id='jy-'+slug(nom); if(DB.tombstones[id]) delete DB.tombstones[id];
+  const j=ajouterJury(nom, tel); if(!j){ toast('Ajout impossible','ko'); return; }
+  sendMessage(j.nom, `Vous êtes inscrit comme membre du jury. Votre code de connexion à l'Espace Jury : ${j.code}.`, j.tel, {titre:'Espace Jury', type:'acces'});
+  saveDB(); document.getElementById('jy-new-nom').value=''; document.getElementById('jy-new-tel').value='';
+  renderJury(); toast('Membre du jury ajouté — code '+j.code,'ok');
+}
+function renderJury(){
+  const l=(DB.jury||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  document.getElementById('jy-list').innerHTML = l.length ? l.map(j=>{
+    const so=DB.sorties.filter(v=>Object.values(v.postes||{}).some(p=>p&&cleNom(p.nom)===cleNom(j.nom))).length;
+    return `<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(j.nom)}</div><span class="badge bg">Code ${escapeHtml(j.code)}</span></div>
+    <div class="li-sub">Tél : <input class="inline-in" value="${escapeHtml(j.tel||'')}" onchange="jyMaj('${j.id}',this.value)"> • ${so} sortie(s)</div>
+    <div class="actions"><button class="btn-xs b-y" onclick="nouveauCode('jury','${j.id}')">Nouveau code</button>${waLink(j.tel,'')?`<a class="btn-xs b-ok" style="text-decoration:none;" target="_blank" href="${waLink(j.tel,'Espace Jury — Commission Exposé. Votre code : '+j.code)}">Envoyer le code par WhatsApp</a>`:''}<button class="btn-xs b-del" onclick="retirerAcces('jury','${j.id}')">Retirer</button></div></div>`; }).join('') : `<div class="empty">Aucun membre du jury enregistré</div>`;
+}
+function jyMaj(id,v){ const j=DB.jury.find(x=>x.id===id); if(!j) return; j.tel=v.trim(); saveDB(); }
+function nouveauCode(coll,id){
+  const p=DB[coll].find(x=>x.id===id); if(!p) return;
+  p.code=codeAleatoire(DB[coll].map(x=>String(x.code)));
+  sendMessage(p.nom, `Votre nouveau code de connexion : ${p.code}.`, p.tel, {titre:coll==='jury'?'Espace Jury':'Espace Modérateurs', type:'acces'});
+  saveDB(); coll==='jury'?renderJury():renderModerateurs(); toast('Nouveau code : '+p.code,'ok');
+}
+function retirerAcces(coll,id){
+  const p=DB[coll].find(x=>x.id===id); if(!p) return;
+  if(!confirm('Retirer '+p.nom+' ? Il ne pourra plus se connecter.')) return;
+  removeRecord(coll,id); saveDB(); coll==='jury'?renderJury():renderModerateurs(); toast('Retiré','ok');
+}
+function renderAcces(){
+  const q=normName((document.getElementById('ac-q')||{}).value||'');
+  let l=(DB.acces||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  if(q) l=l.filter(a=>normName(a.nom).includes(q));
+  document.getElementById('ac-list').innerHTML = `<div class="hint" style="margin:8px 0;">${(DB.acces||[]).length} étudiant(s) ont choisi leur code sur ${DB.etudiants.length}.</div>`+(l.length ? l.slice(0,200).map(a=>`<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(a.nom)}</div><span class="badge bg">Code choisi le ${frDate(a.date)}</span></div><div class="actions"><button class="btn-xs b-y" onclick="reinitPin('${a.id}')">Réinitialiser le code</button></div></div>`).join('') : `<div class="empty">Aucun code enregistré</div>`);
+}
+function reinitPin(id){ const a=DB.acces.find(x=>x.id===id); if(!a) return; if(!confirm('Réinitialiser le code de '+a.nom+' ?')) return; removeRecord('acces',id); sendMessage(a.nom,'Votre code du Suivi a été réinitialisé : choisissez-en un nouveau à la prochaine ouverture.','',{titre:'Suivi',type:'acces'}); saveDB(); renderAcces(); toast('Code réinitialisé','ok'); }
+function modelAcces(){
+  const cm=[W('N°',1,'center'),W('Nom',6),W('Classes',6),W('Téléphone',3.6),W('Code',2,'center')];
+  const rm=(DB.moderateurs||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map((m,i)=>[i+1,m.nom,(m.classes||[]).join(', '),m.tel||'',String(m.code)]);
+  const cj=[W('N°',1,'center'),W('Nom',8),W('Téléphone',4),W('Code',2,'center')];
+  const rj=(DB.jury||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map((m,i)=>[i+1,m.nom,m.tel||'',String(m.code)]);
+  return {title:'Modérateurs de classe et membres du jury — codes de connexion',subtitle:`${genLine()} • Document confidentiel`,fileName:'Moderateurs_Jury_codes',
+    sections:[{heading:'Modérateurs de classe (moderateur.html)',columns:cm,rows:rm,empty:'Aucun modérateur.'},{heading:'Membres du jury (jury.html)',columns:cj,rows:rj,empty:'Aucun membre du jury.'}],
+    sheets:[{name:'Moderateurs',title:'Modérateurs de classe',columns:cm.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows:rm},{name:'Jury',title:'Membres du jury',columns:cj.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows:rj}]};
+}

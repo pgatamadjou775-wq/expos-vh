@@ -250,3 +250,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* cases à cocher (jours des messages programmés) : pas de style « pilule » */
 .fg .mini-pills input[type=checkbox]{width:17px;height:17px;padding:0;-webkit-appearance:checkbox;appearance:auto;accent-color:var(--GRN3);border-radius:4px;}
 .mini-pills label{font-weight:700;color:var(--INK);font-size:12.5px;text-transform:none;letter-spacing:0;margin:0;}
+
+/* ===== Discussions ===== */
+.disc-fil{max-height:58vh;overflow-y:auto;padding:12px;}
+.disc-bulles{display:flex;flex-direction:column;gap:8px;}
+.bulle{max-width:82%;align-self:flex-start;background:var(--BG);border:1.5px solid var(--LINE);border-radius:18px 18px 18px 6px;padding:10px 14px;font-size:13.5px;line-height:1.45;word-wrap:break-word;}
+.bulle.moi{align-self:flex-end;background:var(--GRN2);color:#fff;border-color:var(--GRN2);border-radius:18px 18px 6px 18px;}
+.bulle.moi .pill-link{background:rgba(255,255,255,.18);color:#fff;}
+.bulle.moi .hint{color:rgba(255,255,255,.8);}
+.bulle-h{font-size:10.5px;opacity:.7;margin-top:6px;}
+
+/* v6 : boutons d'action partagés (modérateurs, jury, admin) + constats du jury */
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.btn-xs{padding:6px 12px;font-size:11.5px;font-weight:700;border:none;cursor:pointer;}
+.b-del{background:var(--REDP);color:var(--RED);} .b-ok{background:var(--GRNP);color:var(--GRN);} .b-y{background:var(--YELP);color:var(--YELD);}
+.constat{display:block;padding:9px 16px;border-radius:999px;font-size:12.5px;font-weight:600;margin-bottom:6px;line-height:1.35;}
+.constat.ok{background:var(--GRNP);color:var(--GRN);} .constat.wa{background:var(--YELP);color:var(--YELD);}
+.constat.ko{background:var(--REDP);color:var(--RED);} .constat.in{background:var(--LINE);color:var(--INK);}
+.chrono{border-left:3px solid var(--LINE);margin-left:8px;padding-left:14px;}
+.chrono .etape{position:relative;margin-bottom:14px;}
+.chrono .etape::before{content:'';position:absolute;left:-21px;top:4px;width:11px;height:11px;border-radius:50%;background:var(--GRN);}
+.chrono .etape.msg::before{background:var(--YEL);}
+.chrono .et-d{font-size:11px;color:var(--MUT);font-weight:700;}
+.chrono .et-t{font-size:13px;color:var(--INK);}
+/* Compteurs en pilules (modérateurs, jury, admin) */
+.mini-pills{display:flex;flex-wrap:wrap;gap:6px;}
+.mini-pills > span{padding:7px 13px;border-radius:999px;background:var(--BG);border:1.5px solid var(--LINE);font-size:12px;color:var(--INK);}
+.mini-pills > span b{color:var(--GRN);font-size:14px;margin-right:4px;}
+.mini-pills > label{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:var(--LINE);cursor:pointer;}
