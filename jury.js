@@ -40,6 +40,7 @@ function connecte(){
 function mesSorties(){ return MOI ? (DB.sorties||[]).filter(v=>Object.values(v.postes||{}).some(p=>p && cleNom(p.nom)===cleNom(MOI.nom))).sort((a,b)=>String(a.date).localeCompare(b.date)) : []; }
 function mesMessages(){ return MOI ? DB.messages.filter(m=>messageConcerne(m,MOI.nom)).sort((a,b)=>(b.ts||0)-(a.ts||0)) : []; }
 function majAccueil(){
+  appTete(MOI ? {nom:MOI.nom, sub:'Membre du jury', n:mesMessages().filter(m=>!messageLu(m,MOI.nom)).length+chatsNonLus(MOI.nom), cloche:()=>ouvrir('s-notif')} : null);
   document.getElementById('jy-login').classList.toggle('hidden', !!MOI);
   document.getElementById('jy-menu').classList.toggle('hidden', !MOI);
   document.getElementById('jy-qui').textContent = MOI ? MOI.nom+' — membre du jury' : 'Commission Exposé';
@@ -206,6 +207,7 @@ window.onRemoteUpdate = function(){
   if(on('s-disc')) Discussion.apresSync();
 };
 if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(()=>{});
+window.ouvrirVue = v => { if(!MOI) return; if(v==='discussion') ouvrir('s-disc'); else if(v==='notifications') ouvrir('s-notif'); };
 connecte();
 (function(){ const v=new URLSearchParams(location.search).get('vue'); if(!MOI||!v) return; if(v==='discussion') ouvrir('s-disc'); else ouvrir('s-notif'); })();
 if(navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type==='open' && MOI){ if(/discussion/.test(e.data.url)) ouvrir('s-disc'); else ouvrir('s-notif'); } });

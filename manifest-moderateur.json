@@ -1,0 +1,32 @@
+{
+  "id": "moderateur.html",
+  "name": "Modérateurs — Vases d'Honneur",
+  "short_name": "Modérateurs VH",
+  "description": "Exposés et méthodologie de ma classe — Académie Vases d'Honneur",
+  "start_url": "moderateur.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d3b2e",
+  "theme_color": "#0d3b2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/moderateur-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/moderateur-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/moderateur-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

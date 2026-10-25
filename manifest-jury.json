@@ -1,0 +1,32 @@
+{
+  "id": "jury.html",
+  "name": "Jury — Vases d'Honneur",
+  "short_name": "Jury VH",
+  "description": "Dossiers complets des étudiants pour le jury — Académie Vases d'Honneur",
+  "start_url": "jury.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d3b2e",
+  "theme_color": "#0d3b2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/jury-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/jury-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/jury-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

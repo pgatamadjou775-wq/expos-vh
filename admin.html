@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d3b2e">
+<link rel="manifest" href="manifest-admin.json">
+<meta name="apple-mobile-web-app-title" content="Admin VH">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icons/admin-180.png">
 <title>Administration — Commission Exposé</title>
 <link rel="stylesheet" href="core.css">
 <style>
@@ -93,11 +100,13 @@
         <button id="ad-tab-notif" onclick="adSwitch('notif')">Notifications</button>
         <button id="ad-tab-disc" onclick="adSwitch('disc')">Discussions <span class="count-pill hidden" id="ad-disc-n">0</span></button>
         <button id="ad-tab-acces" onclick="adSwitch('acces')">Modérateurs &amp; Jury</button>
+        <button id="ad-tab-ban" onclick="adSwitch('ban')">Bannières &amp; liens</button>
         <button id="ad-tab-export" onclick="adSwitch('export')">Exports Word / Excel</button>
       </div>
 
       <!-- TABLEAU DE BORD -->
       <div id="ad-dashboard">
+        <div class="ban-home ban-admin" data-ban="admin"></div>
         <div class="dash-head"><div><div class="dash-title">Tableau de bord</div><div class="hint" id="db-maj">—</div></div>
           <div class="exp-btns"><button class="bp" onclick="adSwitch('dashboard')">Actualiser</button><button class="bw" onclick="exportDashboard('docx')">Word</button><button class="bx" onclick="exportDashboard('xlsx')">Excel</button></div></div>
         <div class="dash-kpis" id="db-kpis"></div>
@@ -459,6 +468,20 @@
           <div class="hint" style="margin-bottom:10px;">Chaque étudiant choisit son code à la première connexion à l'application Suivi : il ne voit que ce qui le concerne. Si un étudiant oublie son code, réinitialisez-le ici : il en choisira un nouveau.</div>
           <div class="srch-box"><input type="text" id="ac-q" placeholder="Rechercher un étudiant..." oninput="renderAcces()"></div>
           <div id="ac-list"></div>
+        </div></div>
+      </div>
+
+      <!-- BANNIÈRES DÉFILANTES & LIENS -->
+      <div id="ad-ban" class="hidden">
+        <div class="card"><div class="card-h">Bannières défilantes</div><div class="card-b">
+          <div class="hint" style="margin-bottom:12px;">Ce que vous publiez ici défile aussitôt en haut des 5 interfaces (tablette d'accueil, Suivi, Modérateurs, Jury, Administration), en direct sur tous les écrans ouverts. Choisissez pour chaque bannière qui la voit.</div>
+          <button class="btn-sm btn-g" onclick="bnEditer()">+ Nouvelle bannière</button>
+          <div id="bn-edit" class="hidden" style="margin-top:14px;"></div>
+          <div id="bn-list" style="margin-top:14px;"></div>
+        </div></div>
+        <div class="card"><div class="card-h">Liens des applications à partager</div><div class="card-b">
+          <div class="hint" style="margin-bottom:10px;">Envoyez le lien : la personne l'ouvre sur son téléphone, puis touche « Installer » (Android) ou Partager → « Sur l'écran d'accueil » (iPhone). Chaque interface s'installe comme une application séparée, avec sa propre icône. L'installation demande que le serveur soit en ligne (adresse en https).</div>
+          <div id="bn-liens"></div>
         </div></div>
       </div>
 

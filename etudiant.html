@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest-accueil.json">
+<meta name="apple-mobile-web-app-title" content="Accueil VH">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icons/accueil-180.png">
 <title>Commission Exposé — Académie Vases d'Honneur</title>
 <link rel="stylesheet" href="core.css">
 </head>
@@ -13,6 +17,7 @@
 <!-- ================= ACCUEIL ================= -->
 <div class="screen on" id="s-home">
   <div style="width:100%;">
+    <div id="app-top"></div>
     <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
     <div class="hero">
       <div class="hero-badge" id="acc-badge">Académie Vases d'Honneur</div>
@@ -22,6 +27,9 @@
       <button class="btn-sm" style="margin-top:14px;background:rgba(255,255,255,.15);color:#fff;" onclick="manualRefresh()">Actualiser</button>
       <div class="sync-badge" style="margin-top:8px;"></div>
     </div>
+    <div class="app-sheet">
+      <div class="ban-home" data-ban="accueil"></div>
+      <div class="app-section" id="app-section">Mon espace</div>
     <div class="tiles">
       <button class="tile tile-1" onclick="openPresence()">
         <div class="tile-t">Pointer mon arrivée</div>
@@ -39,6 +47,7 @@
         <div class="tile-t">Espace Correcteur</div>
         <div class="tile-s">Accès réservé — code personnel</div>
       </button>
+    </div>
     </div>
   </div>
 </div>

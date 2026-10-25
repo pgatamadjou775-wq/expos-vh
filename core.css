@@ -278,3 +278,87 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .mini-pills > span{padding:7px 13px;border-radius:999px;background:var(--BG);border:1.5px solid var(--LINE);font-size:12px;color:var(--INK);}
 .mini-pills > span b{color:var(--GRN);font-size:14px;margin-right:4px;}
 .mini-pills > label{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:var(--LINE);cursor:pointer;}
+
+/* ================= v7 : esthétique du modèle « resto » ================= */
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-condensed-latin-600-normal.woff2) format('woff2');}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-condensed-latin-700-normal.woff2) format('woff2');}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:800;font-display:swap;src:url(fonts/barlow-condensed-latin-800-normal.woff2) format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/barlow-latin-400-normal.woff2) format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/barlow-latin-500-normal.woff2) format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-latin-600-normal.woff2) format('woff2');}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-latin-700-normal.woff2) format('woff2');}
+
+.h{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.2px;line-height:.95;}
+
+/* Bannières défilantes */
+.ban-home{position:relative;z-index:3;margin:-40px 0 0;}
+.ban-home:empty{display:none;}
+.ban-home:not(:empty) ~ .tiles{margin-top:14px;}
+.ban-home:not(:empty) ~ #md-login, .ban-home:not(:empty) ~ #jy-login{margin-top:14px !important;}
+.ban-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:0 14px;scrollbar-width:none;}
+.ban-track::-webkit-scrollbar{display:none;}
+.ban{flex:0 0 calc(100% - 8px);height:150px;border-radius:22px;scroll-snap-align:center;position:relative;overflow:hidden;color:#fff;background:var(--GRN2);display:flex;align-items:flex-end;cursor:pointer;box-shadow:0 12px 26px rgba(13,59,46,.22);}
+.ban-track .ban:only-child{flex-basis:100%;}
+.ban.ban-rouge{background:var(--RED);}
+.ban.ban-jaune{background:var(--YEL);color:var(--INK);}
+.ban img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.ban.has-img::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(13,59,46,.92) 0%,rgba(13,59,46,.55) 48%,rgba(0,0,0,0) 78%);}
+.ban .deco1{position:absolute;right:-40px;top:-50px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.10);}
+.ban .deco2{position:absolute;right:-24px;bottom:-74px;width:150px;height:150px;border-radius:50%;border:22px solid var(--RED);opacity:.95;}
+.ban.ban-rouge .deco2{border-color:var(--YEL);}
+.ban.ban-jaune .deco2{border-color:var(--RED);}
+.ban.ban-jaune .deco1{background:rgba(255,255,255,.35);}
+.ban .bt{position:relative;z-index:2;padding:16px 18px;max-width:76%;}
+.ban .bt .h{font-size:26px;margin-bottom:6px;}
+.ban .bt p{font-size:13px;line-height:1.3;font-weight:500;opacity:.95;}
+.dots{display:flex;justify-content:center;gap:6px;margin-top:10px;}
+.dots i{width:7px;height:7px;border-radius:4px;background:var(--LINE);transition:all .25s;}
+.dots i.on{width:22px;background:var(--RED);}
+
+/* Carte « Installer l'application » */
+.install-card{position:relative;z-index:3;margin:-40px 14px 12px;background:var(--W);border-radius:22px;padding:12px 14px 12px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 12px 26px rgba(13,59,46,.18);border-left:5px solid var(--YEL);}
+.install-card + .ban-home{margin-top:0;}
+.install-card div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.install-card b{font-size:13.5px;color:var(--INK);}
+.install-card span{font-size:11.5px;color:var(--MUT);line-height:1.3;}
+.install-card .btn-sm{flex-shrink:0;}
+
+/* En-tête quand on est connecté (vert bouteille + feuille crème) */
+#app-top{display:none;}
+body.connecte #s-home{background:var(--GRN);}
+body.connecte #s-home .banner-wrap, body.connecte #s-home .hero{display:none;}
+body.connecte #app-top{display:flex;align-items:center;gap:12px;padding:calc(16px + env(safe-area-inset-top,0px)) 18px 24px;color:#fff;}
+.app-logo{width:54px;height:54px;border-radius:50%;background:var(--RED);flex-shrink:0;position:relative;box-shadow:0 6px 18px rgba(179,18,28,.45);}
+.app-logo::before{content:'';position:absolute;inset:11px;border-radius:50%;border:5px solid var(--YEL);}
+.app-logo::after{content:'';position:absolute;inset:22px;border-radius:50%;background:var(--YEL);}
+.app-txt{flex:1;min-width:0;}
+.app-hello{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--YEL);}
+.app-nom{font-size:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
+.app-sub{font-size:13px;font-weight:600;opacity:.8;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.app-bell{position:relative;flex-shrink:0;border:none;cursor:pointer;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:12px 16px;font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;}
+.app-bell-n{position:absolute;top:-6px;right:-4px;min-width:20px;height:20px;border-radius:10px;background:var(--RED);color:#fff;font-size:11px;display:none;align-items:center;justify-content:center;padding:0 5px;border:2px solid var(--GRN);}
+.app-bell-n.on{display:flex;}
+.app-sheet{display:contents;}
+body.connecte #s-home .app-sheet{display:block;background:var(--BG);border-radius:30px 30px 0 0;padding:20px 0 40px;min-height:calc(100vh - 110px);}
+body.connecte #s-home .ban-home, body.connecte #s-home .install-card{margin-top:0;}
+body.connecte #s-home .install-card{margin-bottom:14px;}
+body.connecte #s-home .tiles{margin-top:16px;}
+.app-section{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-weight:800;text-transform:uppercase;font-size:30px;color:var(--INK);padding:18px 18px 0;line-height:1;position:relative;display:inline-block;}
+.app-section::after{content:'';position:absolute;left:18px;right:0;bottom:-8px;height:4px;border-radius:3px;background:var(--RED);}
+#app-section{display:none;}
+body.connecte #app-section{display:inline-block;margin-bottom:6px;}
+@media (min-width:1000px){ body.connecte #s-home .app-sheet{min-height:0;} }
+.ban-home.ban-admin{margin:0 0 16px;}
+.ban-home.ban-admin .ban-track{padding:0;}
+.ban-home.ban-admin .ban{height:170px;flex-basis:100%;}
+#ad-dashboard > .install-card{margin:0 0 12px;}
+.bn-item{border:1.5px solid var(--LINE);border-radius:22px;padding:12px;margin-bottom:12px;}
+.bn-item.off{opacity:.55;}
+.bn-prev .ban{height:140px;flex-basis:auto;cursor:default;}
+.bn-col{display:flex;gap:10px;}
+.bn-col button{width:40px;height:40px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px var(--LINE);cursor:pointer;}
+.bn-col button.on{box-shadow:0 0 0 3px var(--INK);}
+@media (min-width:640px){
+  #s-home .ban-home{max-width:640px;margin-left:auto;margin-right:auto;}
+  #s-home .install-card{max-width:612px;margin-left:auto;margin-right:auto;}
+}

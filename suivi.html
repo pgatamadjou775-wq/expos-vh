@@ -6,9 +6,11 @@
 <meta name="theme-color" content="#0d3b2e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Suivi VH">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-title" content="Suivi VH">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icons/suivi-180.png">
 <title>Suivi — Académie Vases d'Honneur</title>
 <link rel="stylesheet" href="core.css">
 </head>
@@ -17,6 +19,7 @@
 <!-- ================= ACCUEIL SUIVI ================= -->
 <div class="screen on" id="s-home">
   <div style="width:100%;">
+    <div id="app-top"></div>
     <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
     <div class="hero">
       <div class="hero-badge" id="acc-badge">Académie Vases d'Honneur</div>
@@ -24,6 +27,9 @@
       <div class="hero-clock">Commission Exposé</div>
       <div class="sync-badge" style="margin-top:8px;"></div>
     </div>
+    <div class="app-sheet">
+      <div class="ban-home" data-ban="suivi"></div>
+      <div class="app-section" id="app-section">Mon espace</div>
     <div class="tiles">
       <button class="tile tile-1" onclick="openSuivi()" style="grid-column:span 2;">
         <div class="tile-t">Mon suivi <span class="count-pill hidden" id="home-unread">0</span></div>
@@ -40,6 +46,7 @@
     </div>
     <div class="home-foot">
       <div class="hint" style="text-align:center;">Astuce : ajoutez cette page à votre écran d'accueil pour l'utiliser comme une application.</div>
+    </div>
     </div>
   </div>
 </div>

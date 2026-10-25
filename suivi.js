@@ -43,10 +43,17 @@ function openSuivi(){
   renderSuivi();
 }
 // Personnes connues (étudiants + membres), sans doublons
+// Personnes connues, sans doublons : étudiants de la liste, MAIS AUSSI tous ceux qui ont déposé un exposé
+// ou un rapport, les responsables, mandataires, membres, modérateurs et jurys.
 function personnesConnues(){
   const l=DB.etudiants.map(e=>({nom:e.nom, sub:'Étudiant — '+(e.commission||'')}))
-    .concat(DB.membres.map(m=>({nom:m.nom, sub:m.role||'Membre de la commission'})));
-  return uniq(l, x=>cleNom(x.nom));
+    .concat(DB.expositions.map(x=>({nom:x.etudiantNom, sub:'Exposé déposé — '+(x.classe||'')})))
+    .concat(DB.rapports.map(x=>({nom:x.etudiantNom, sub:'Rapport de stage — '+(x.commission||'')})))
+    .concat(DB.rapports.filter(x=>x.mandataire&&x.mandataire.nom).map(x=>({nom:x.mandataire.nom, sub:'Mandataire de '+x.etudiantNom})))
+    .concat(DB.membres.map(m=>({nom:m.nom, sub:m.role||'Membre de la commission'})))
+    .concat((DB.moderateurs||[]).map(m=>({nom:m.nom, sub:'Modérateur'})))
+    .concat((DB.jury||[]).map(m=>({nom:m.nom, sub:'Membre du jury'})));
+  return uniq(l.filter(x=>x.nom && String(x.nom).trim()), x=>cleNom(x.nom));
 }
 function suChercher(){
   const q=normName(document.getElementById('su-s').value);
@@ -106,6 +113,8 @@ function majCompteurs(){
   [['home-unread',n],['su-unread',n]].forEach(([id,v])=>{ const el=document.getElementById(id); if(el){ el.textContent=v; el.classList.toggle('hidden',!v); } });
   const hm=document.getElementById('home-moi');
   if(hm) hm.textContent = moi ? `${moi} — ${n?n+' notification(s) non lue(s)':'aucune nouvelle notification'}` : 'Statuts de mes dépôts + notifications + remarques du correcteur';
+  const etu=moi&&DB.etudiants.find(e=>cleNom(e.nom)===cleNom(moi)), ex=moi&&DB.expositions.find(x=>cleNom(x.etudiantNom)===cleNom(moi));
+  appTete(moi ? {nom:moi, sub: etu ? 'Étudiant — commission '+(etu.commission||'—') : ex ? 'Étudiant — '+(ex.classe||'exposé') : 'Suivi de mes documents', n:n+nc, cloche:openSuivi} : null);
   try{ if(navigator.setAppBadge){ n?navigator.setAppBadge(n):navigator.clearAppBadge(); } }catch(e){}
 }
 function etatPush(){
@@ -131,12 +140,12 @@ function renderSuivi(){
   document.getElementById('su-qui').classList.toggle('hidden', !!moi);
   document.getElementById('su-moi').classList.toggle('hidden', !moi);
   if(!moi) return;
-  const n=normName(moi);
-  const etu=DB.etudiants.find(e=>normName(e.nom)===n), mem=DB.membres.find(m=>normName(m.nom)===n);
+  const n=cleNom(moi);
+  const etu=DB.etudiants.find(e=>cleNom(e.nom)===n), mem=DB.membres.find(m=>cleNom(m.nom)===n), exm=DB.expositions.find(x=>cleNom(x.etudiantNom)===n);
   document.getElementById('su-moi-nom').textContent=moi;
-  document.getElementById('su-moi-sub').textContent = etu ? 'Étudiant — commission '+(etu.commission||'—') : mem ? (mem.role||'Membre de la commission') : 'Responsable / mandataire';
+  document.getElementById('su-moi-sub').textContent = etu ? 'Étudiant — commission '+(etu.commission||'—') : mem ? (mem.role||'Membre de la commission') : exm ? 'Étudiant — '+(exm.classe||'exposé') : 'Responsable / mandataire';
   etatPush();
-  const est = v => normName(v)===n;
+  const est = v => !!v && cleNom(v)===n;
   const mesExposes = DB.expositions.filter(x=>est(x.etudiantNom));
   const mesRapports = DB.rapports.filter(x=>est(x.etudiantNom) || est(x.responsable&&x.responsable.nom) || est(x.mandataire&&x.mandataire.nom));
   const tous = [...mesExposes.map(x=>({...x, type:'Exposé'})), ...mesRapports.map(x=>({...x, type:'Rapport de stage'}))]
@@ -224,6 +233,7 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type==='open'){ if(String(e.data.url).includes('discussion')) openDiscussion(); else openSuivi(); } });
   if(window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
+window.ouvrirVue = v => { if(v==='discussion') openDiscussion(); else if(v==='notifications') openSuivi(); };
 appliquerAccueil(); majCompteurs();
 Discussion.moi=getMoi();
 const vueDemandee=new URLSearchParams(location.search).get('vue');

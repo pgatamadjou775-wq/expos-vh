@@ -48,7 +48,7 @@ if(path.resolve(DATA_DIR)!==path.resolve(ROOT) && !fs.existsSync(DATA_FILE) && f
 }
 
 // Doit correspondre à core.js
-const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes','moderateurs','jury','chats','acces'];
+const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes','moderateurs','jury','chats','acces','bannieres'];
 const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode','reglages'];
 const PUSH_FILE = path.join(DATA_DIR, 'push.json');   // clés VAPID + abonnements (jamais envoyé aux appareils)
 
@@ -56,7 +56,7 @@ const MIME = {
   '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8', '.json':'application/json; charset=utf-8',
   '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.svg':'image/svg+xml',
-  '.ico':'image/x-icon', '.md':'text/plain; charset=utf-8', '.webmanifest':'application/manifest+json'
+  '.ico':'image/x-icon', '.md':'text/plain; charset=utf-8', '.webmanifest':'application/manifest+json', '.woff2':'font/woff2', '.txt':'text/plain; charset=utf-8', '.pdf':'application/pdf', '.webp':'image/webp'
 };
 
 [PHOTO_DIR, BACKUP_DIR, PIECES_DIR].forEach(d=>{ try{ fs.mkdirSync(d,{recursive:true}); }catch(e){} });
@@ -190,9 +190,10 @@ function sendPush(sub, payloadObj){
 }
 const normName = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 // Même règle que messageConcerne() dans core.js
+function cleNomS(s){ return normName(s).replace(/[.,;:'’"()\-]/g,' ').replace(/\b(mme|mlle|mr|m|dr|pasteur|pst|frere|soeur)\b/g,' ').replace(/\s+/g,' ').trim(); }
 function concerne(m, nom){
   const n=normName(nom); if(!n) return false;
-  if(!m.cible || m.cible==='personne') return normName(m.nom)===n;
+  if(!m.cible || m.cible==='personne') return normName(m.nom)===n || cleNomS(m.nom)===cleNomS(nom);
   if(m.cible==='tous') return true;
   const etu=(DB.etudiants||[]).find(e=>normName(e.nom)===n), mem=(DB.membres||[]).find(x=>normName(x.nom)===n);
   if(m.cible==='etudiants') return !!etu;
@@ -222,7 +223,7 @@ function analyserNouveautes(avant, apres){
     if(cAvant.has(c.id) || (c.ts||0)<recent) return;
     toAll('chat', c);
     const vus=new Set();
-    PUSH.abonnements.forEach(a=>{ if(normName(a.nom)!==normName(c.a) || vus.has(a.endpoint)) return; vus.add(a.endpoint);
+    PUSH.abonnements.forEach(a=>{ if(cleNomS(a.nom)!==cleNomS(c.a) || vus.has(a.endpoint)) return; vus.add(a.endpoint);
       sendPush(a, {title:'Message de '+c.de, body:c.texte || (c.pieces&&c.pieces.length?'Pièce jointe : '+c.pieces[0].nom:''), tag:'chat-'+c.fil, url:(a.page||'suivi.html')+'?vue=discussion'}); });
   });
   const mAvant=idsDe(avant,'messages');
@@ -365,7 +366,7 @@ const server = http.createServer((req, res) => {
   fs.readFile(filePath, (err, content) => {
     if(err){ res.writeHead(404, {'Content-Type':'text/plain; charset=utf-8'}); res.end('Fichier non trouvé : ' + urlPath); return; }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, {'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': ext==='.jpg'||ext==='.png' ? 'max-age=86400' : 'no-cache'});
+    res.writeHead(200, {'Content-Type': (/^manifest.*\.json$/.test(path.basename(filePath))?'application/manifest+json':MIME[ext]) || 'application/octet-stream', 'Cache-Control': ext==='.jpg'||ext==='.png' ? 'max-age=86400' : 'no-cache'});
     res.end(content);
   });
 });

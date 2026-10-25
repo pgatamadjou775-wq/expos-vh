@@ -1,0 +1,32 @@
+{
+  "id": "etudiant.html",
+  "name": "Accueil — Commission Exposé",
+  "short_name": "Accueil VH",
+  "description": "Tablette d'accueil : pointage, dépôts, correction — Académie Vases d'Honneur",
+  "start_url": "etudiant.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d3b2e",
+  "theme_color": "#0d3b2e",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icons/accueil-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/accueil-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/accueil-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

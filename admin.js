@@ -16,7 +16,7 @@ function showAdmin(){
 let currentAdminTab='dashboard';
 function adSwitch(tab){
   currentAdminTab=tab;
-  ['dashboard','membres','expose','rapport','etudiants','config','seances','notif','disc','acces','export'].forEach(t=>{
+  ['dashboard','membres','expose','rapport','etudiants','config','seances','notif','disc','acces','ban','export'].forEach(t=>{
     document.getElementById('ad-tab-'+t).classList.toggle('on', t===tab);
     document.getElementById('ad-'+t).classList.toggle('hidden', t!==tab);
   });
@@ -32,9 +32,11 @@ function adSwitch(tab){
   if(tab==='seances'){ renderAdSeances(); renderAdSeancesAlertes(); renderEgliseStats(); fillSortieEgliseSelect(); renderAdSorties(); if(!document.querySelector('#se-themes-list .theme-row')) addThemeRow('se-themes-list'); }
   if(tab==='disc') renderDiscussions();
   if(tab==='acces'){ renderModerateurs(); renderJury(); renderAcces(); }
+  if(tab==='ban'){ renderBannieres(); renderLiens(); }
   if(tab==='export'){ fillExportSelectors(); renderExportList(); }
   majBadgeDisc();
 }
+window.ouvrirVue = v => { if(v==='discussion') adSwitch('disc'); else if(v==='notifications') adSwitch('notif'); };
 window.onRemoteUpdate = function(){
   updateSyncBadge();
   const main=document.getElementById('ad-main');
@@ -1408,3 +1410,78 @@ function modelAcces(){
     sections:[{heading:'Modérateurs de classe (moderateur.html)',columns:cm,rows:rm,empty:'Aucun modérateur.'},{heading:'Membres du jury (jury.html)',columns:cj,rows:rj,empty:'Aucun membre du jury.'}],
     sheets:[{name:'Moderateurs',title:'Modérateurs de classe',columns:cm.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows:rm},{name:'Jury',title:'Membres du jury',columns:cj.map(c=>W(c.label,Math.round(c.width*4.5),c.align)),rows:rj}]};
 }
+
+
+/* ================= v7 : BANNIÈRES DÉFILANTES (éditeur façon « resto ») ================= */
+let BN=null;
+function renderBannieres(){
+  const l=(DB.bannieres||[]).slice().sort((a,b)=>(a.ordre||0)-(b.ordre||0));
+  const lbl=Object.fromEntries(BAN_CIBLES);
+  document.getElementById('bn-list').innerHTML = l.length ? l.map((b,i)=>`<div class="bn-item ${b.actif===false?'off':''}">
+    <div class="bn-prev">${Bannieres.html(b,true)}</div>
+    <div class="li-sub" style="margin:8px 0 4px;">Visible sur : <b>${(b.cibles&&b.cibles.length?b.cibles:BAN_CIBLES.map(c=>c[0])).map(c=>escapeHtml(lbl[c]||c)).join(', ')}</b>${b.dateFin?' • jusqu\'au '+frDate(b.dateFin):''}${b.dateFin && b.dateFin<todayStr()?' <span class="badge br">Expirée</span>':''}</div>
+    <div class="actions">
+      <button class="btn-xs ${b.actif===false?'b-y':'b-ok'}" onclick="bnMaj('${b.id}',{actif:${b.actif===false}})">${b.actif===false?'Masquée — publier':'En ligne — masquer'}</button>
+      <button class="btn-xs b-ok" onclick="bnDeplacer('${b.id}',-1)" ${i?'':'disabled'}>Monter</button>
+      <button class="btn-xs b-ok" onclick="bnDeplacer('${b.id}',1)" ${i<l.length-1?'':'disabled'}>Descendre</button>
+      <button class="btn-xs b-y" onclick="bnEditer('${b.id}')">Modifier</button>
+      <button class="btn-xs b-del" onclick="bnSupprimer('${b.id}')">Supprimer</button></div></div>`).join('') : `<div class="empty">Aucune bannière. Ajoutez votre première information.</div>`;
+}
+function bnEditer(id){
+  const b=id?(DB.bannieres||[]).find(x=>x.id===id):null;
+  BN=b?JSON.parse(JSON.stringify(b)):{id:'', titre:'', texte:'', image:'', couleur:'vert', lien:'', actif:true, cibles:BAN_CIBLES.map(c=>c[0]), dateFin:''};
+  bnDessiner();
+  document.getElementById('bn-edit').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function bnApercu(){ const p=document.getElementById('bn-apercu'); if(p) p.innerHTML=Bannieres.html(BN,true); }
+function bnDessiner(){
+  const z=document.getElementById('bn-edit'); z.classList.remove('hidden');
+  z.innerHTML=`<div class="sub-card"><h4>${BN.id?'Modifier la bannière':'Nouvelle bannière'}</h4>
+    <div class="bn-prev" id="bn-apercu">${Bannieres.html(BN,true)}</div>
+    <div class="fg" style="margin-top:12px;"><label>Image (facultative)</label>
+      <div class="actions" style="margin-top:0;"><label class="btn-xs b-ok" style="position:relative;overflow:hidden;cursor:pointer;">Choisir une image<input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;" onchange="bnImage(this)"></label>${BN.image?'<button class="btn-xs b-del" onclick="BN.image=\'\';bnDessiner()">Retirer l\'image</button>':''}</div></div>
+    <div class="fg"><label>Titre</label><input type="text" maxlength="60" value="${escapeHtml(BN.titre)}" oninput="BN.titre=this.value;bnApercu()"></div>
+    <div class="fg"><label>Texte</label><textarea rows="2" maxlength="180" oninput="BN.texte=this.value;bnApercu()">${escapeHtml(BN.texte)}</textarea></div>
+    <div class="fg-row">
+      <div class="fg"><label>Couleur de fond (sans image)</label><div class="bn-col">${[['vert','#145c47'],['rouge','#b3121c'],['jaune','#f0b90b']].map(([k,c])=>`<button type="button" class="${BN.couleur===k?'on':''}" style="background:${c}" onclick="BN.couleur='${k}';bnDessiner()" aria-label="${k}"></button>`).join('')}</div></div>
+      <div class="fg"><label>Au toucher, ouvrir</label><select onchange="BN.lien=this.value;document.getElementById('bn-url-w').classList.toggle('hidden',this.value!=='url')">${BAN_LIENS.concat([['url','Un lien internet']]).map(([k,l])=>`<option value="${k}" ${(k==='url'?/^https?:/.test(BN.lien):BN.lien===k)?'selected':''}>${l}</option>`).join('')}</select>
+        <input type="url" id="bn-url-w" class="${/^https?:/.test(BN.lien)?'':'hidden'}" style="margin-top:6px;" placeholder="https://..." value="${/^https?:/.test(BN.lien)?escapeHtml(BN.lien):''}" oninput="BN.lien=this.value"></div>
+    </div>
+    <div class="fg"><label>Qui la voit ?</label><div class="mini-pills">${BAN_CIBLES.map(([k,l])=>`<label><input type="checkbox" ${(BN.cibles||[]).includes(k)?'checked':''} onchange="BN.cibles=(BN.cibles||[]).filter(x=>x!=='${k}');if(this.checked)BN.cibles.push('${k}')"> ${escapeHtml(l)}</label>`).join('')}</div></div>
+    <div class="fg"><label>Afficher jusqu'au (facultatif)</label><input type="date" value="${escapeHtml(BN.dateFin||'')}" onchange="BN.dateFin=this.value"></div>
+    <div class="actions"><button class="btn-sm btn-g" onclick="bnPublier()">Publier</button><button class="btn-sm btn-ghost" onclick="document.getElementById('bn-edit').classList.add('hidden')">Annuler</button></div></div>`;
+}
+async function bnImage(inp){
+  const f=inp.files[0]; inp.value=''; if(!f) return;
+  try{ toast('Envoi de l\'image…','ok'); BN.image=(await envoyerFichier(f)).url; }
+  catch(e){ try{ BN.image=await compressImage(f,1200,0.75); }catch(_){ toast(e.message,'ko'); return; } }
+  bnDessiner();
+}
+function bnPublier(){
+  if(BN.lien==='url') BN.lien='';
+  if(!BN.titre.trim() && !BN.texte.trim() && !BN.image){ toast('Ajoutez au moins un titre, un texte ou une image','ko'); return; }
+  if(!(BN.cibles||[]).length){ toast('Choisissez au moins une interface','ko'); return; }
+  const doublon=(DB.bannieres||[]).find(x=>x.id!==BN.id && normName(x.titre)===normName(BN.titre) && normName(x.texte)===normName(BN.texte));
+  if(doublon){ toast('Une bannière identique existe déjà','ko'); return; }
+  const b=Object.assign({}, BN, {titre:BN.titre.trim(), texte:BN.texte.trim()});
+  if(!b.id){ b.id=nid(); b.ordre=Math.max(0,...(DB.bannieres||[]).map(x=>x.ordre||0))+1; DB.bannieres.push(b); }
+  else { const i=DB.bannieres.findIndex(x=>x.id===b.id); DB.bannieres[i]=b; }
+  saveDB(); document.getElementById('bn-edit').classList.add('hidden');
+  renderBannieres(); Bannieres.rendreTout(true); toast('Bannière publiée — elle défile déjà sur les écrans','ok');
+}
+function bnMaj(id,ch){ const b=DB.bannieres.find(x=>x.id===id); if(!b) return; Object.assign(b,ch); saveDB(); renderBannieres(); Bannieres.rendreTout(true); }
+function bnDeplacer(id,d){
+  const l=DB.bannieres.slice().sort((a,b)=>(a.ordre||0)-(b.ordre||0)); const i=l.findIndex(b=>b.id===id), j=i+d; if(j<0||j>=l.length) return;
+  [l[i],l[j]]=[l[j],l[i]]; l.forEach((b,k)=>{ b.ordre=k+1; }); saveDB(); renderBannieres(); Bannieres.rendreTout(true);
+}
+function bnSupprimer(id){ if(!confirm('Supprimer cette bannière ?')) return; removeRecord('bannieres',id); saveDB(); renderBannieres(); Bannieres.rendreTout(true); toast('Bannière supprimée','ok'); }
+function renderLiens(){
+  const base=location.origin+location.pathname.replace(/[^/]*$/,'');
+  const apps=[['suivi.html','Suivi (étudiants)','Mes exposés et rapports, notifications, discussion'],['moderateur.html','Modérateurs de classe','Exposés et méthodologie de ma classe'],['jury.html','Membres du jury','Dossiers complets des étudiants'],['etudiant.html','Tablette d\'accueil','Pointage, dépôts, Espace Correcteur'],['admin.html','Administration','Réservé à l\'administration']];
+  const https=location.protocol==='https:' || location.hostname==='localhost';
+  document.getElementById('bn-liens').innerHTML=(https?'':`<div class="alert-banner">Vous êtes sur une adresse en http : les téléphones pourront ouvrir les liens, mais l'installation et les notifications téléphone verrouillé demandent l'adresse en ligne (https).</div>`)+
+    apps.map(([p,t,s])=>{ const u=base+p; return `<div class="list-item"><div class="li-top"><div class="li-name">${escapeHtml(t)}</div><img src="icons/${p==='etudiant.html'?'accueil':p.replace('.html','')}-192.png" alt="" style="width:34px;height:34px;border-radius:9px;"></div>
+      <div class="li-sub">${escapeHtml(s)}<br><a href="${escapeHtml(u)}" target="_blank">${escapeHtml(u)}</a></div>
+      <div class="actions"><button class="btn-xs b-ok" onclick="copierLien(${escapeHtml(JSON.stringify(u))})">Copier le lien</button><a class="btn-xs b-y" style="text-decoration:none;" target="_blank" href="https://wa.me/?text=${encodeURIComponent(t+' — Commission Exposé. Ouvrez ce lien sur votre téléphone puis installez l\'application : '+u)}">Envoyer par WhatsApp</a></div></div>`; }).join('');
+}
+async function copierLien(u){ try{ await navigator.clipboard.writeText(u); toast('Lien copié','ok'); }catch(e){ prompt('Copiez ce lien :',u); } }

@@ -273,3 +273,27 @@ Remplacez seulement les fichiers du code ; ne supprimez pas `data.json`, `push.j
 
 ### Mise à jour depuis la version 5
 Remplacez les fichiers du programme et redémarrez : **les données sont conservées** et mises à jour automatiquement à la première ouverture (comme pour les versions précédentes). Ne remplacez jamais `data.json`, `push.json`, `photos/`, `justificatifs/`, `sauvegardes/`.
+
+---
+
+## Version 7 — bannières défilantes, 5 applications installables
+
+### Bannières défilantes (comme le logiciel resto)
+- **Administration → Bannières & liens** : titre, texte, image (facultative), couleur (vert, rouge, jaune), action au toucher (discussion, notifications ou un lien internet), date de fin facultative.
+- Choisissez **qui la voit** : tablette d'accueil, Suivi, Modérateurs, Jury, Administration (toutes par défaut).
+- Les bannières sont enregistrées dans la base de données et défilent automatiquement. Elles se mettent à jour **en direct** sur tous les écrans ouverts. Vous pouvez les masquer, les republier, les réordonner ou les supprimer.
+
+### Chaque lien s'installe comme une application
+- Suivi, Modérateurs, Jury, Administration et Tablette d'accueil ont chacun leur fichier d'installation (`manifest-*.json`) et leur icône (dossier `icons/`).
+- **Administration → Bannières & liens** : copiez le lien de chaque application ou envoyez-le par WhatsApp.
+- Sur le téléphone, ouvrez le lien. Sur Android, touchez « Installer » dans la carte affichée en haut de la page. Sur iPhone, dans Safari, touchez Partager puis « Sur l'écran d'accueil ».
+- L'installation et les notifications téléphone verrouillé demandent le serveur en ligne (adresse en **https**).
+
+### Espaces connectés au style resto
+Une fois connecté (Suivi, Modérateurs, Jury), l'accueil affiche :
+- un en-tête vert avec votre nom et le compteur de notifications ;
+- les bannières défilantes ;
+- vos rubriques.
+
+### Correction : les déposants d'exposé dans le Suivi
+Les étudiants qui ont seulement déposé un exposé (sans être dans la liste des rapports de stage) apparaissent maintenant dans le Suivi. Ils y reçoivent leurs notifications. Un nom écrit avec ou sans accents ou majuscules est reconnu.

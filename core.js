@@ -77,7 +77,7 @@ function fillSelect(id, list, opts){
    Source : Etudiants_par_commission_2.docx (115 lignes, 16 commissions).
    Le responsable de commission est rattaché à chaque étudiant.
    Pour une commission rattachée à une église fille, le responsable est « Église fille ». */
-const DATA_VERSION = 6;
+const DATA_VERSION = 7;
 const OFFICIEL_COMMISSIONS = [
   {"id": "cm-01", "nom": "Logistique", "responsable": "TRAORE Charles", "totalAttendu": 16},
   {"id": "cm-02", "nom": "Cours", "responsable": "Mme OUALLE", "totalAttendu": 20},
@@ -335,6 +335,7 @@ function ensureOfficialData(db){
   if((db.dataVersion||0) < 4) ensureMembresV4(db);
   if((db.dataVersion||0) < 5){ dedoublonnerV5(db); if(db.reglages) db.reglages.version=5; }   // la marque force l'enregistrement des réglages sur le serveur
   if((db.dataVersion||0) < 6){ ensureV6(db); if(db.reglages) db.reglages.version=6; }
+  if((db.dataVersion||0) < 7){ ensureV7(db); }
   db.dataVersion = DATA_VERSION;
   return true;
 }
@@ -546,7 +547,9 @@ function annuaire(){
   (DB.moderateurs||[]).forEach(m=>l.push({nom:m.nom, role:'Modérateur — '+((m.classes||[]).join(', ')||'classe')}));
   (DB.jury||[]).forEach(j=>l.push({nom:j.nom, role:'Membre du jury'}));
   (DB.etudiants||[]).forEach(e=>l.push({nom:e.nom, role:'Étudiant — '+(e.commission||'')}));
-  return uniq(l, x=>cleNom(x.nom));
+  (DB.expositions||[]).forEach(x=>l.push({nom:x.etudiantNom, role:'Étudiant — exposé '+(x.classe||'')}));
+  (DB.rapports||[]).forEach(x=>l.push({nom:x.etudiantNom, role:'Étudiant — rapport de stage'}));
+  return uniq(l.filter(x=>x.nom), x=>cleNom(x.nom));
 }
 // Envoi d'une pièce jointe / d'un justificatif au serveur (photo réduite automatiquement, PDF jusqu'à 6 Mo)
 function lireFichier(file){ return new Promise((ok,ko)=>{ const r=new FileReader(); r.onerror=()=>ko(r.error); r.onload=e=>ok(e.target.result); r.readAsDataURL(file); }); }
@@ -677,7 +680,7 @@ function commissionResponsable(nomCommission){ const c=(DB.commissions||[]).find
    qui les FUSIONNE fiche par fiche : la tablette, le PC et les téléphones peuvent enregistrer
    en même temps sans s'écraser. Sans serveur : mode hors-ligne sur un seul appareil. */
 // Collections fusionnées fiche par fiche (par id)
-const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes','moderateurs','jury','chats','acces'];
+const RECORD_COLLECTIONS = ['etudiants','membres','presences','expositions','rapports','sessions','sorties','bibliotheque','meditations','quizBiblique','messages','programmes','moderateurs','jury','chats','acces','bannieres'];
 // Paramètres fusionnés en bloc (la modification la plus récente gagne)
 const CONFIG_KEYS = ['creneaux','eglises','commissions','motifsPresence','adminCode','reglages'];
 
@@ -774,6 +777,7 @@ function adoptRemote(remote){
   const sig=JSON.stringify(DB);
   if(sig!==LAST_RENDER_SIG){
     LAST_RENDER_SIG=sig;
+    try{ Bannieres.rendreTout(); }catch(e){ console.error(e); }
     if(typeof window.onRemoteUpdate==='function'){ try{ window.onRemoteUpdate(); }catch(e){ console.error(e); } }
   }
 }
@@ -897,7 +901,7 @@ function sendAnnonce(cible, texte, titre, commission, auteur){
 // Ce message concerne-t-il cette personne ?
 function messageConcerne(m, nom){
   const n=normName(nom); if(!n) return false;
-  if(!m.cible || m.cible==='personne') return normName(m.nom)===n;
+  if(!m.cible || m.cible==='personne') return normName(m.nom)===n || cleNom(m.nom)===cleNom(nom);
   if(m.cible==='tous') return true;
   const etu=(DB.etudiants||[]).find(e=>normName(e.nom)===n);
   const mem=(DB.membres||[]).find(x=>normName(x.nom)===n);
@@ -971,6 +975,96 @@ function notifSysteme(titre, texte){
     navigator.serviceWorker && navigator.serviceWorker.getRegistration ? navigator.serviceWorker.getRegistration().then(reg=>{ if(reg) reg.showNotification(titre,{body:texte,tag:'ce-'+Date.now()}); else new Notification(titre,{body:texte}); }).catch(()=>{ new Notification(titre,{body:texte}); }) : new Notification(titre,{body:texte});
   }catch(e){}
 }
+
+/* ================= v7 : BANNIÈRES DÉFILANTES (comme le modèle « resto ») =================
+   Gérées dans Administration → Bannières, enregistrées dans la base (collection « bannieres »),
+   affichées en carrousel dans les 5 interfaces et mises à jour en direct. */
+const BAN_CIBLES = [['accueil','Tablette d\'accueil'],['suivi','Suivi (étudiants)'],['moderateurs','Modérateurs'],['jury','Jury'],['admin','Administration']];
+const BAN_LIENS = [['','Rien'],['discussion','La discussion'],['notifications','Les notifications']];
+function ensureV7(db){
+  if(!Array.isArray(db.bannieres)) db.bannieres=[];
+  if(!db.tombstones) db.tombstones={};
+  const tous=BAN_CIBLES.map(c=>c[0]);
+  [{id:'bn-bienvenue', titre:'Bienvenue', texte:'Commission Exposé — Académie Vases d\'Honneur. Suivez ici les informations importantes.', couleur:'vert', ordre:1},
+   {id:'bn-installer', titre:'Installez l\'application', texte:'Ajoutez cette page à l\'écran d\'accueil de votre téléphone pour recevoir les notifications.', couleur:'jaune', ordre:2}]
+  .forEach(b=>{ if(db.tombstones[b.id] || db.bannieres.some(x=>x.id===b.id)) return; db.bannieres.push(Object.assign({image:'', lien:'', actif:true, cibles:tous.slice(), dateFin:''}, b)); });
+}
+const Bannieres = {
+  sig:'', timers:[],
+  liste(cible){
+    const t=todayStr();
+    return (DB && DB.bannieres || []).filter(b=>b.actif!==false && (!b.cibles || !b.cibles.length || b.cibles.includes(cible)) && (!b.dateFin || b.dateFin>=t) && (b.titre||b.texte||b.image))
+      .sort((a,b)=>(a.ordre||0)-(b.ordre||0));
+  },
+  html(b, apercu){
+    const lien = !apercu && b.lien ? ` onclick="banClick(${escapeHtml(JSON.stringify(b.lien))})"` : '';
+    return `<div class="ban ban-${escapeHtml(b.couleur||'vert')} ${b.image?'has-img':''}"${lien}>${b.image?`<img src="${escapeHtml(b.image)}" alt="">`:'<div class="deco1"></div><div class="deco2"></div>'}
+      <div class="bt">${b.titre?`<div class="h">${escapeHtml(b.titre)}</div>`:''}${b.texte?`<p>${escapeHtml(b.texte)}</p>`:''}</div></div>`;
+  },
+  rendreTout(force){
+    const zones=[...document.querySelectorAll('[data-ban]')];
+    if(!zones.length || !DB) return;
+    const sig=JSON.stringify(zones.map(z=>this.liste(z.dataset.ban).map(b=>[b.id,b.titre,b.texte,b.image,b.couleur,b.lien])));
+    if(!force && sig===this.sig) return;
+    this.sig=sig; this.timers.forEach(clearInterval); this.timers=[];
+    zones.forEach(z=>{
+      const l=this.liste(z.dataset.ban);
+      z.innerHTML = l.length ? `<div class="ban-track">${l.map(b=>this.html(b)).join('')}</div>${l.length>1?`<div class="dots">${l.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div>`:''}` : '';
+      this.animer(z);
+    });
+  },
+  animer(z){
+    const tr=z.querySelector('.ban-track'); if(!tr || tr.children.length<2) return;
+    const dots=[...z.querySelectorAll('.dots i')]; let idx=0, userAt=0;
+    const pas=()=>tr.children[0].offsetWidth+12;
+    tr.addEventListener('scroll',()=>{ const i=Math.round(tr.scrollLeft/pas()); dots.forEach((d,k)=>d.classList.toggle('on',k===i)); idx=i; },{passive:true});
+    ['touchstart','mousedown'].forEach(ev=>tr.addEventListener(ev,()=>{ userAt=Date.now(); },{passive:true}));
+    this.timers.push(setInterval(()=>{
+      if(Date.now()-userAt<6000 || !document.body.contains(tr) || !tr.offsetParent) return;
+      idx=(idx+1)%tr.children.length;
+      tr.scrollTo({left:tr.children[idx].offsetLeft-tr.offsetLeft-14, behavior:'smooth'});
+    },4500));
+  }
+};
+function banClick(l){
+  if(/^https?:\/\//i.test(l)){ window.open(l,'_blank','noopener'); return; }
+  if(typeof window.ouvrirVue==='function') window.ouvrirVue(l);
+}
+
+/* ================= v7 : INSTALLATION SUR LE TÉLÉPHONE (chaque interface) ================= */
+let INSTALL_EVT=null;
+const estInstallee = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone===true;
+const estIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); INSTALL_EVT=e; majInstall(); });
+window.addEventListener('appinstalled', ()=>{ INSTALL_EVT=null; majInstall(); toast('Application installée sur ce téléphone','ok'); });
+function majInstall(){
+  document.querySelectorAll('.install-card').forEach(x=>x.remove());
+  if(estInstallee()) return;
+  const nom=(document.querySelector('meta[name="apple-mobile-web-app-title"]')||{}).content||'l\'application';
+  let html='';
+  if(INSTALL_EVT) html=`<div><b>Installer « ${escapeHtml(nom)} »</b><span>Une icône sur l'écran d'accueil, comme une vraie application.</span></div><button class="btn-sm btn-y" onclick="installerApp()">Installer</button>`;
+  else if(estIOS()) html=`<div><b>Installer « ${escapeHtml(nom)} » sur l'iPhone</b><span>Dans Safari, touchez le bouton Partager puis « Sur l'écran d'accueil ».</span></div>`;
+  else if(/android/i.test(navigator.userAgent)) html=`<div><b>Installer « ${escapeHtml(nom)} »</b><span>Menu du navigateur (⋮) puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».</span></div>`;
+  if(!html) return;
+  document.querySelectorAll('[data-ban]').forEach(z=>{ if(z.dataset.install==='non') return; const c=document.createElement('div'); c.className='install-card'; c.innerHTML=html; z.parentNode.insertBefore(c,z); });
+}
+async function installerApp(){
+  if(!INSTALL_EVT){ majInstall(); return; }
+  INSTALL_EVT.prompt(); try{ await INSTALL_EVT.userChoice; }catch(e){}
+  INSTALL_EVT=null; majInstall();
+}
+
+/* ================= v7 : EN-TÊTE « CONNECTÉ » (esthétique du modèle resto) ================= */
+// opts : {nom, sub, n (non lus), cloche:fn, quitter:fn}
+function appTete(opts){
+  const el=document.getElementById('app-top'); if(!el) return;
+  document.body.classList.toggle('connecte', !!opts);
+  if(!opts){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="app-logo"></div>
+    <div class="app-txt"><div class="app-hello">Bonjour</div><div class="app-nom h">${escapeHtml(opts.nom)}</div><div class="app-sub">${escapeHtml(opts.sub||'')}</div></div>
+    <button class="app-bell" title="Notifications" aria-label="Notifications"><span class="app-bell-l">Notifs</span><span class="app-bell-n ${opts.n?'on':''}">${opts.n||0}</span></button>`;
+  const b=el.querySelector('.app-bell'); if(opts.cloche) b.onclick=opts.cloche;
+}
 /* ---------- Notifications push (téléphone verrouillé / application fermée) ----------
    Comme dans le modèle : il faut que l'application soit ouverte en HTTPS (serveur en ligne)
    ou sur « localhost ». Sur le Wi-Fi local en http, le bandeau + son fonctionnent quand l'app est ouverte. */
@@ -996,6 +1090,9 @@ async function desactiverPush(){
 
 loadDB();
 LAST_RENDER_SIG=JSON.stringify(DB);
+if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(()=>{});
+document.addEventListener('DOMContentLoaded', ()=>{ Bannieres.rendreTout(true); majInstall(); });
+if(document.readyState!=='loading') setTimeout(()=>{ Bannieres.rendreTout(true); majInstall(); },0);
 connectStream();
 syncNow();
 setInterval(()=>syncNow(), 8000);   // filet de sécurité : le temps réel passe par connectStream()

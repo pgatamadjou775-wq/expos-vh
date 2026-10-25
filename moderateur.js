@@ -47,6 +47,7 @@ function mesExposes(classe){
 function mesMessages(){ return MOI ? DB.messages.filter(m=>messageConcerne(m,MOI.nom)).sort((a,b)=>(b.ts||0)-(a.ts||0)) : []; }
 
 function majAccueil(){
+  appTete(MOI ? {nom:MOI.nom, sub:'Modérateur — '+(mesClasses().join(', ')||'classe à préciser'), n:mesMessages().filter(m=>!messageLu(m,MOI.nom)).length+chatsNonLus(MOI.nom), cloche:()=>ouvrir('s-notif')} : null);
   document.getElementById('md-login').classList.toggle('hidden', !!MOI);
   document.getElementById('md-menu').classList.toggle('hidden', !MOI);
   document.getElementById('md-qui').textContent = MOI ? `${MOI.nom} — ${mesClasses().join(', ')||'classe à préciser par l\'administration'}` : 'Commission Exposé';
@@ -166,6 +167,7 @@ window.onRemoteUpdate = function(){
   if(document.getElementById('s-dem').classList.contains('on')) rendreDemandes();
 };
 if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(()=>{});
+window.ouvrirVue = v => { if(!MOI) return; if(v==='discussion') ouvrir('s-disc'); else if(v==='notifications') ouvrir('s-notif'); };
 connecte();
 (function(){ const v=new URLSearchParams(location.search).get('vue'); if(!MOI||!v) return; if(v==='discussion') ouvrir('s-disc'); else ouvrir('s-notif'); })();
 if(navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type==='open' && MOI){ if(/discussion/.test(e.data.url)) ouvrir('s-disc'); else ouvrir('s-notif'); } });

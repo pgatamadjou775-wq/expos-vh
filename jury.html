@@ -6,8 +6,10 @@
 <meta name="theme-color" content="#0d3b2e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest-jury.json">
 <meta name="apple-mobile-web-app-title" content="Jury VH">
-<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icons/jury-180.png">
 <title>Espace Jury — Académie Vases d'Honneur</title>
 <link rel="stylesheet" href="core.css">
 </head>
@@ -15,6 +17,7 @@
 
 <div class="screen on" id="s-home">
   <div style="width:100%;">
+    <div id="app-top"></div>
     <div class="banner-wrap"><img class="banner-img" src="banniere.jpg" alt="Académie Vases d'Honneur"></div>
     <div class="hero">
       <div class="hero-badge">Académie Vases d'Honneur</div>
@@ -23,6 +26,9 @@
       <div class="sync-badge" style="margin-top:8px;"></div>
     </div>
 
+    <div class="app-sheet">
+      <div class="ban-home" data-ban="jury"></div>
+      <div class="app-section" id="app-section">Mon espace</div>
     <div id="jy-login" class="scr-body" style="margin-top:-30px;position:relative;z-index:3;">
       <div class="card"><div class="card-b">
         <div class="fg"><label>Votre nom</label><input type="text" id="jy-nom" placeholder="Tapez votre nom puis choisissez-le" autocomplete="off" oninput="jyChercher()"></div>
@@ -42,6 +48,7 @@
       <button class="tile tile-2" onclick="ouvrir('s-notif')"><div class="tile-t">Mes notifications <span class="count-pill hidden" id="c-notif">0</span></div><div class="tile-s">Annonces et messages de l'administration</div></button>
       <button class="tile tile-3" onclick="ouvrir('s-disc')"><div class="tile-t">Discussion <span class="count-pill hidden" id="c-disc">0</span></div><div class="tile-s">Échanger avec l'administration ou toute autre personne</div></button>
       <div class="home-foot"><button class="btn-sm btn-ghost" onclick="jyDeconnexion()">Se déconnecter</button></div>
+    </div>
     </div>
   </div>
 </div>
